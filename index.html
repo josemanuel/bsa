@@ -1,0 +1,2579 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BSA Manager – Gestión de Informes de Bioseguridad Ambiental</title>
+  <script src="lib/pdf.min.js"></script>
+  <script src="lib/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --primary: #0d4f6b;
+      --primary-dark: #083447;
+      --accent: #1a7a9c;
+      --success: #1b7a3d;
+      --warning: #b8860b;
+      --danger: #a12c2c;
+      --bg: #f4f7f9;
+      --card: #ffffff;
+      --border: #d0dce3;
+      --text: #1a2a33;
+      --muted: #5a6f7a;
+      --radius: 8px;
+      --shadow: 0 2px 8px rgba(13,79,107,0.08);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+    header.app-header {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: #fff;
+      padding: 0.9rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    header .logo { font-size: 1.25rem; font-weight: 700; letter-spacing: 0.02em; }
+    header .logo span { font-weight: 400; opacity: 0.85; font-size: 0.95rem; }
+    header .meta { font-size: 0.85rem; opacity: 0.9; }
+    /* nav.tabs styles: ver bloque dropdown más abajo */
+    main { padding: 1.25rem 1.5rem 3rem; max-width: 1400px; margin: 0 auto; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 1.25rem 1.4rem;
+      margin-bottom: 1.25rem;
+    }
+    .card h2 {
+      font-size: 1.1rem;
+      color: var(--primary);
+      margin-bottom: 0.9rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .grid-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    .stat {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+      text-align: center;
+      box-shadow: var(--shadow);
+    }
+    .stat .value { font-size: 1.8rem; font-weight: 700; color: var(--primary); }
+    .stat .label { font-size: 0.8rem; color: var(--muted); margin-top: 0.2rem; }
+    .stat.warn .value { color: var(--warning); }
+    .stat.ok .value { color: var(--success); }
+    .stat.danger .value { color: var(--danger); }
+    label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.3rem; color: var(--muted); }
+    input[type="text"], input[type="number"], input[type="date"], input[type="month"],
+    select, textarea {
+      width: 100%;
+      padding: 0.5rem 0.65rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.9rem;
+      background: #fff;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(26,122,156,0.15);
+    }
+    .row { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.9rem; }
+    .row > div { flex: 1; min-width: 140px; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.5rem 1rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-secondary { background: #e8eef2; color: var(--text); }
+    .btn-secondary:hover { background: #d5dee5; }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-success:hover { background: #156832; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover { background: #821f1f; }
+    .btn-sm { padding: 0.3rem 0.65rem; font-size: 0.8rem; }
+    .btn-group { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+    table.data {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+    table.data th, table.data td {
+      border: 1px solid var(--border);
+      padding: 0.45rem 0.6rem;
+      text-align: left;
+    }
+    table.data th {
+      background: #eaf1f5;
+      color: var(--primary);
+      font-weight: 700;
+      position: sticky;
+      top: 0;
+    }
+    table.data tr:nth-child(even) { background: #f8fafb; }
+    table.data tr.inc { background: #fff5f5; }
+    table.data tr.ok { background: #f0faf3; }
+    table.data input, table.data select {
+      width: 100%;
+      padding: 0.25rem 0.4rem;
+      font-size: 0.85rem;
+      border: 1px solid transparent;
+      background: transparent;
+    }
+    table.data input:focus, table.data select:focus {
+      border-color: var(--accent);
+      background: #fff;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .badge-ok { background: #d4edda; color: #155724; }
+    .badge-warn { background: #fff3cd; color: #856404; }
+    .badge-danger { background: #f8d7da; color: #721c24; }
+    .badge-info { background: #d1ecf1; color: #0c5460; }
+    .alert {
+      padding: 0.85rem 1rem;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+    }
+    .alert-info { background: #e8f4f8; border-left: 4px solid var(--accent); }
+    .alert-success { background: #e6f4ea; border-left: 4px solid var(--success); }
+    .alert-warning { background: #fff8e6; border-left: 4px solid var(--warning); }
+    .alert-danger { background: #fce8e8; border-left: 4px solid var(--danger); }
+    .file-drop {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      text-align: center;
+      background: #fafcfd;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .file-drop:hover, .file-drop.dragover {
+      border-color: var(--accent);
+      background: #eef6f9;
+    }
+    .file-list { margin-top: 0.75rem; font-size: 0.85rem; }
+    .file-list li { padding: 0.3rem 0; display: flex; justify-content: space-between; align-items: center; }
+    /* Report preview */
+    #reportPreview {
+      background: #fff;
+      border: 1px solid var(--border);
+      padding: 2rem 2.5rem;
+      max-width: 900px;
+      margin: 0 auto;
+      font-size: 0.95rem;
+      box-shadow: var(--shadow);
+    }
+    #reportPreview h1 { font-size: 1.35rem; color: var(--primary); text-align: center; margin-bottom: 0.3rem; }
+    #reportPreview .subtitle { text-align: center; color: var(--muted); margin-bottom: 1.5rem; }
+    #reportPreview h2 { font-size: 1.1rem; color: var(--primary); margin: 1.4rem 0 0.6rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+    #reportPreview table { width: 100%; border-collapse: collapse; margin: 0.8rem 0; font-size: 0.9rem; }
+    #reportPreview th, #reportPreview td { border: 1px solid #333; padding: 0.4rem 0.55rem; }
+    #reportPreview th { background: #e8eef2; }
+    #reportPreview .meta-table { width: auto; margin-bottom: 1rem; }
+    #reportPreview .meta-table td { border: none; padding: 0.2rem 0.8rem 0.2rem 0; }
+    #reportPreview .conclusion { background: #f0f7f0; padding: 0.9rem 1rem; border-left: 4px solid var(--success); margin: 1rem 0; }
+    #reportPreview .recomendaciones { background: #f8f6f0; padding: 0.9rem 1rem; border-left: 4px solid var(--warning); margin: 1rem 0; }
+    #reportPreview .anexo { margin-top: 1.5rem; font-size: 0.88rem; color: var(--muted); }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; align-items: center; }
+    .toolbar .spacer { flex: 1; }
+    .config-table input { max-width: 100px; }
+    .log-box {
+      background: #1a2a33;
+      color: #b8d4e0;
+      font-family: "Consolas", "Courier New", monospace;
+      font-size: 0.8rem;
+      padding: 0.85rem 1rem;
+      border-radius: 6px;
+      max-height: 220px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    footer.app-footer {
+      text-align: center;
+      padding: 1rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      background: var(--card);
+    }
+    @media print {
+      body * { visibility: hidden; }
+      #reportPreview, #reportPreview *,
+      #histReportPreview, #histReportPreview * { visibility: visible; }
+      #reportPreview, #histReportPreview {
+        position: absolute;
+        left: 0; top: 0;
+        width: 100%;
+        border: none;
+        box-shadow: none;
+        padding: 0;
+      }
+      .no-print { display: none !important; }
+    }
+    /* Dropdown nav */
+    nav.tabs {
+      display: flex;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 0.5rem;
+      gap: 0;
+      overflow: visible;
+      position: relative;
+      flex-wrap: wrap;
+      align-items: stretch;
+    }
+    nav.tabs .nav-item {
+      position: relative;
+    }
+    nav.tabs > .nav-item > button.nav-btn,
+    nav.tabs > button.nav-btn {
+      background: none;
+      border: none;
+      padding: 0.85rem 1rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      white-space: nowrap;
+      transition: color 0.15s, border-color 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    nav.tabs > .nav-item > button.nav-btn:hover,
+    nav.tabs > button.nav-btn:hover { color: var(--primary); }
+    nav.tabs > .nav-item > button.nav-btn.active,
+    nav.tabs > button.nav-btn.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+    nav.tabs .nav-btn .caret { font-size: 0.65rem; opacity: 0.7; }
+    nav.tabs .dropdown {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      min-width: 220px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 0 0 8px 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      z-index: 200;
+      padding: 0.35rem 0;
+    }
+    nav.tabs .nav-item.open .dropdown { display: block; }
+    nav.tabs .dropdown button {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: none;
+      border: none;
+      padding: 0.6rem 1rem;
+      font-size: 0.88rem;
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 500;
+    }
+    nav.tabs .dropdown button:hover {
+      background: #eaf1f5;
+      color: var(--primary);
+    }
+    nav.tabs .dropdown button.active-sub {
+      background: #e0eef5;
+      color: var(--primary);
+      font-weight: 700;
+    }
+    .nav-burger {
+      display: none;
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 1.5rem;
+      padding: 0.4rem 0.6rem;
+      cursor: pointer;
+      line-height: 1;
+    }
+    /* Modals */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(10,30,40,0.55);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-box {
+      background: #fff;
+      border-radius: 10px;
+      max-width: 640px;
+      width: 100%;
+      max-height: 85vh;
+      overflow-y: auto;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+      padding: 1.5rem 1.75rem;
+    }
+    .modal-box h2 {
+      color: var(--primary);
+      margin-bottom: 0.8rem;
+      font-size: 1.2rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.4rem;
+    }
+    .modal-box .modal-close {
+      float: right;
+      background: none;
+      border: none;
+      font-size: 1.4rem;
+      cursor: pointer;
+      color: var(--muted);
+      line-height: 1;
+    }
+    .modal-box ul { padding-left: 1.2rem; margin: 0.5rem 0; }
+    .modal-box li { margin: 0.35rem 0; font-size: 0.9rem; }
+    .modal-box a { color: var(--accent); }
+
+    @media (max-width: 900px) {
+      header.app-header { flex-wrap: wrap; gap: 0.4rem; padding: 0.7rem 1rem; }
+      header .meta { font-size: 0.75rem; width: 100%; }
+      .nav-burger { display: block; position: absolute; right: 0.75rem; top: 0.55rem; color: var(--primary); background: #e8eef2; border-radius: 6px; }
+      header.app-header { position: relative; }
+      nav.tabs {
+        display: none;
+        flex-direction: column;
+        width: 100%;
+        padding: 0.5rem;
+        border-bottom: 1px solid var(--border);
+      }
+      nav.tabs.mobile-open { display: flex; }
+      nav.tabs .nav-item { width: 100%; }
+      nav.tabs > .nav-item > button.nav-btn,
+      nav.tabs > button.nav-btn { width: 100%; border-bottom: 1px solid var(--border); border-radius: 0; }
+      nav.tabs .dropdown {
+        position: static;
+        box-shadow: none;
+        border: none;
+        border-radius: 0;
+        background: #f4f7f9;
+        padding-left: 0.5rem;
+      }
+      nav.tabs .nav-item.open .dropdown { display: block; }
+    }
+    @media (max-width: 700px) {
+      main { padding: 0.75rem; }
+      .grid-stats { grid-template-columns: 1fr 1fr; }
+      #reportPreview { padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header no-print">
+    <div class="logo">BSA Manager <span>| Bioseguridad Ambiental</span></div>
+    <div class="meta" id="headerMeta">Hospital de Jarrio · Responsable no definido</div>
+    <button type="button" class="nav-burger no-print" id="navBurger" aria-label="Menú">☰</button>
+  </header>
+
+  <nav class="tabs no-print" id="mainTabs">
+    <button type="button" class="nav-btn active" data-panel="dashboard">Panel de control</button>
+
+    <div class="nav-item" data-menu="archivos">
+      <button type="button" class="nav-btn" data-dropdown="archivos">Archivos <span class="caret">▾</span></button>
+      <div class="dropdown">
+        <button type="button" data-panel="import">Importación</button>
+        <button type="button" data-panel="review">Revisión de resultados</button>
+        <button type="button" data-panel="historico">Histórico de muestreos</button>
+        <button type="button" data-panel="project">Gestión de proyecto</button>
+      </div>
+    </div>
+
+    <div class="nav-item" data-menu="informes">
+      <button type="button" class="nav-btn" data-dropdown="informes">Informes <span class="caret">▾</span></button>
+      <div class="dropdown">
+        <button type="button" data-panel="report">Informe mensual</button>
+        <button type="button" data-panel="informe-historico">Informe histórico evolutivo</button>
+      </div>
+    </div>
+
+    <button type="button" class="nav-btn" data-panel="config">Configuración</button>
+    <button type="button" class="nav-btn" id="btnHelp" data-modal="help">Ayuda</button>
+    <button type="button" class="nav-btn" id="btnAbout" data-modal="about">Acerca de</button>
+  </nav>
+
+  <main>
+    <!-- ========== DASHBOARD ========== -->
+    <section class="panel active" id="panel-dashboard">
+      <div class="grid-stats">
+        <div class="stat">
+          <div class="value" id="statPeriod">—</div>
+          <div class="label">Periodo</div>
+        </div>
+        <div class="stat">
+          <div class="value" id="statPoints">0</div>
+          <div class="label">Puntos procesados</div>
+        </div>
+        <div class="stat">
+          <div class="value" id="statDocs">0</div>
+          <div class="label">Documentos</div>
+        </div>
+        <div class="stat ok">
+          <div class="value" id="statValid">0</div>
+          <div class="label">Registros válidos</div>
+        </div>
+        <div class="stat warn">
+          <div class="value" id="statInc">0</div>
+          <div class="label">Incidencias</div>
+        </div>
+        <div class="stat" id="statStatusCard">
+          <div class="value" id="statStatus">—</div>
+          <div class="label">Estado</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Periodo del informe</h2>
+        <div class="row">
+          <div>
+            <label for="selYear">Año</label>
+            <select id="selYear"></select>
+          </div>
+          <div>
+            <label for="selMonth">Mes</label>
+            <select id="selMonth">
+              <option value="01">Enero</option>
+              <option value="02">Febrero</option>
+              <option value="03">Marzo</option>
+              <option value="04">Abril</option>
+              <option value="05">Mayo</option>
+              <option value="06">Junio</option>
+              <option value="07">Julio</option>
+              <option value="08">Agosto</option>
+              <option value="09">Septiembre</option>
+              <option value="10">Octubre</option>
+              <option value="11">Noviembre</option>
+              <option value="12">Diciembre</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:flex-end;">
+            <button class="btn btn-primary" id="btnApplyPeriod">Aplicar periodo</button>
+          </div>
+        </div>
+        <div class="alert alert-info" id="periodInfo">
+          Seleccione el mes y año del muestreo. Los puntos esperados se calcularán según el calendario de muestreo del Hospital de Jarrio.
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Resumen de validación</h2>
+        <div id="validationSummary">
+          <p style="color:var(--muted);">Importe o cargue datos para ver el resumen de validación.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Registro de operaciones</h2>
+        <div class="log-box" id="opLog">[Inicio] Aplicación cargada. Datos locales. Sin telemetría.</div>
+      </div>
+    </section>
+
+    <!-- ========== IMPORT ========== -->
+    <section class="panel" id="panel-import">
+      <div class="card">
+        <h2>Importar datos</h2>
+        <div class="alert alert-info">
+          <strong>Formatos nativos:</strong> CSV y JSON (procesamiento 100 % local).<br>
+          <strong>Importación de PDF:</strong> arrastre o seleccione los informes PDF del laboratorio (uno por punto de muestreo). 
+          La aplicación extrae automáticamente Denominación, Aerobios mesófilos, Hongos N.P., Hongos Patógenos, fecha y nº de informe.<br>
+          También admite CSV/JSON, pegado de texto, entrada manual o la <strong>demo de agosto 2026</strong>.
+        </div>
+
+        <div class="file-drop" id="fileDrop">
+          <p><strong>Arrastre archivos aquí</strong> o haga clic para seleccionar</p>
+          <p style="font-size:0.85rem;color:var(--muted);margin-top:0.4rem;">PDF · CSV · JSON · procesamiento local</p>
+          <input type="file" id="fileInput" accept=".pdf,.csv,.json,.txt" multiple style="display:none;">
+        </div>
+        <ul class="file-list" id="fileList"></ul>
+
+        <div class="btn-group">
+          <button class="btn btn-primary" id="btnLoadDemo">Cargar demo Agosto 2026</button>
+          <button class="btn btn-secondary" id="btnAddManual">Añadir registro manual</button>
+          <button class="btn btn-secondary" id="btnPasteCSV">Pegar CSV / texto</button>
+        </div>
+      </div>
+
+      <div class="card" id="pasteCard" style="display:none;">
+        <h2>Pegar contenido CSV o JSON</h2>
+        <textarea id="pasteArea" rows="8" placeholder="punto;nivelRiesgo;aerobios;hongosNP;hongosPat;fechaRecogida&#10;Quirófano 1;Alto. R4;2;No detectado;No detectado;2026-08-25"></textarea>
+        <div class="btn-group">
+          <button class="btn btn-primary" id="btnProcessPaste">Procesar texto</button>
+          <button class="btn btn-secondary" id="btnCancelPaste">Cancelar</button>
+        </div>
+      </div>
+
+      <div class="card" id="manualCard" style="display:none;">
+        <h2>Registro manual</h2>
+        <div class="row">
+          <div>
+            <label>Punto de recogida</label>
+            <select id="manPunto"></select>
+          </div>
+          <div>
+            <label>Nivel de riesgo</label>
+            <input type="text" id="manRiesgo" readonly>
+          </div>
+          <div>
+            <label>Fecha recogida</label>
+            <input type="date" id="manFecha">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Aerobios mesófilos (ufc/m³)</label>
+            <input type="text" id="manAerobios" placeholder="número o vacío">
+          </div>
+          <div>
+            <label>Hongos No Patógenos</label>
+            <input type="text" id="manHongosNP" placeholder="No detectado / número">
+          </div>
+          <div>
+            <label>Hongos Patógenos</label>
+            <input type="text" id="manHongosPat" placeholder="No detectado / número">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Observaciones</label>
+            <input type="text" id="manObs">
+          </div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-success" id="btnSaveManual">Guardar registro</button>
+          <button class="btn btn-secondary" id="btnCancelManual">Cancelar</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== REVIEW ========== -->
+    <section class="panel" id="panel-review">
+      <div class="card">
+        <h2>Revisión de resultados</h2>
+        <div class="toolbar">
+          <input type="text" id="filterText" placeholder="Filtrar por punto..." style="max-width:220px;">
+          <select id="filterEstado" style="max-width:160px;">
+            <option value="">Todos los estados</option>
+            <option value="validado">Validados</option>
+            <option value="pendiente">Pendientes</option>
+            <option value="incidencia">Incidencias</option>
+          </select>
+          <button class="btn btn-sm btn-secondary" id="btnRefreshTable">Actualizar</button>
+          <div class="spacer"></div>
+          <button class="btn btn-sm btn-danger" id="btnClearAll" title="Eliminar todos los registros">Vaciar datos</button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="data" id="reviewTable">
+            <thead>
+              <tr>
+                <th>Punto</th>
+                <th>Riesgo</th>
+                <th>Fecha</th>
+                <th>Aerobios</th>
+                <th>Hongos N.P.</th>
+                <th>Hongos Pat.</th>
+                <th>Estado</th>
+                <th>Origen</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="reviewBody"></tbody>
+          </table>
+        </div>
+        <p style="margin-top:0.6rem;font-size:0.85rem;color:var(--muted);" id="reviewCount">0 registros</p>
+      </div>
+    </section>
+
+    <!-- ========== CONFIG ========== -->
+    <section class="panel" id="panel-config">
+      <div class="card">
+        <h2>Puntos de muestreo y niveles de riesgo</h2>
+        <p style="font-size:0.85rem;color:var(--muted);margin-bottom:0.8rem;">
+          Definidos según la hoja de instalaciones del Hospital de Jarrio. Editables.
+        </p>
+        <div style="overflow-x:auto;">
+          <table class="data config-table" id="pointsTable">
+            <thead>
+              <tr>
+                <th>Punto de recogida</th>
+                <th>Nivel de riesgo</th>
+                <th>Frecuencia</th>
+                <th>Meses de muestreo (1-12)</th>
+              </tr>
+            </thead>
+            <tbody id="pointsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      
+      <div class="card">
+        <h2>Añadir nuevo punto de muestreo</h2>
+        <p style="font-size:0.85rem;color:var(--muted);margin-bottom:0.8rem;">
+          Seleccione el área y el tipo de instalación según el Anexo 1 (niveles de riesgo UNE 171340 / algoritmo del hospital).
+          El nivel de riesgo se asigna automáticamente.
+        </p>
+        <div class="row">
+          <div>
+            <label>Área</label>
+            <select id="newPointArea"><option value="">— Seleccione área —</option></select>
+          </div>
+          <div>
+            <label>Tipo de instalación</label>
+            <select id="newPointTipo" disabled><option value="">— Primero elija área —</option></select>
+          </div>
+          <div>
+            <label>Nivel de riesgo (auto)</label>
+            <input type="text" id="newPointRiesgo" readonly style="background:#f0f4f7;">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Nombre del punto (ej. Quirófano 4, REA Box 3)</label>
+            <input type="text" id="newPointNombre" placeholder="Nombre identificativo">
+          </div>
+          <div>
+            <label>Frecuencia</label>
+            <select id="newPointFreq">
+              <option value="MENSUAL">Mensual</option>
+              <option value="TRIMESTRAL">Trimestral</option>
+              <option value="SEMESTRAL">Semestral</option>
+            </select>
+          </div>
+          <div>
+            <label>Meses de muestreo (1-12, separados por coma)</label>
+            <input type="text" id="newPointMeses" placeholder="1,2,3,4,5,6,7,8,9,10,11,12">
+          </div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-success" id="btnAddPoint">Añadir punto de muestreo</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Umbrales y reglas de interpretación (algoritmo Hospital de Jarrio)</h2>
+        <div class="alert alert-info" style="font-size:0.85rem;">
+          Criterios del diagrama de flujo de bioseguridad ambiental:<br>
+          <strong>R4</strong> Mesófilos &lt;10 · Mohos: Ausencia · Patógenos: Ausencia<br>
+          <strong>R3</strong> Mesófilos &lt;150 · Mohos: Ausencia · Patógenos: Ausencia<br>
+          <strong>R2</strong> Mesófilos &lt;200 · Mohos &lt;10 · Patógenos: Ausencia<br>
+          <strong>R1</strong> Mesófilos &lt;200 · Mohos &lt;25 · Patógenos: Ausencia
+        </div>
+        <div class="row">
+          <div>
+            <label>Mesófilos R4 (límite &lt;)</label>
+            <input type="number" id="thrR4" value="10">
+          </div>
+          <div>
+            <label>Mesófilos R3</label>
+            <input type="number" id="thrR3" value="150">
+          </div>
+          <div>
+            <label>Mesófilos R2</label>
+            <input type="number" id="thrR2" value="200">
+          </div>
+          <div>
+            <label>Mesófilos R1</label>
+            <input type="number" id="thrR1" value="200">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Hongos N.P. R4 (0=Ausencia)</label>
+            <input type="number" id="thrHongosR4" value="0">
+          </div>
+          <div>
+            <label>Hongos N.P. R3 (0=Ausencia)</label>
+            <input type="number" id="thrHongosR3" value="0">
+          </div>
+          <div>
+            <label>Hongos N.P. R2 (&lt;N)</label>
+            <input type="number" id="thrHongosR2" value="10">
+          </div>
+          <div>
+            <label>Hongos N.P. R1 (&lt;N)</label>
+            <input type="number" id="thrHongosR1" value="25">
+          </div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" id="btnSaveConfig">Guardar configuración</button>
+          <button class="btn btn-secondary" id="btnResetConfig">Restablecer valores del algoritmo</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Hospital / Identificación</h2>
+        <div class="row">
+          <div>
+            <label>Nombre del centro</label>
+            <input type="text" id="cfgHospital" value="Hospital de Jarrio">
+          </div>
+          <div>
+            <label>Responsable</label>
+            <input type="text" id="cfgResponsable" value="" placeholder="Nombre del responsable técnico">
+          </div>
+          <div>
+            <label>Tipo de muestra por defecto</label>
+            <input type="text" id="cfgTipoMuestra" value="Aire de ambiente interior">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== REPORT ========== -->
+    <section class="panel" id="panel-report">
+      <div class="toolbar no-print">
+        <button class="btn btn-primary" id="btnGenerateReport">Generar / Actualizar informe</button>
+        <button class="btn btn-success" id="btnPrintReport">Imprimir / PDF</button>
+        <button class="btn btn-secondary" id="btnExportCSV">Exportar CSV</button>
+        <button class="btn btn-secondary" id="btnExportJSON">Exportar JSON datos</button>
+        <div class="spacer"></div>
+        <span id="reportStatus" class="badge badge-info">Pendiente de generación</span>
+      </div>
+
+      <div id="reportPreview">
+        <p style="text-align:center;color:var(--muted);">Pulse «Generar / Actualizar informe» para construir el documento.</p>
+      </div>
+    </section>
+
+    
+
+    <!-- ========== INFORME HISTÓRICO ========== -->
+    <section class="panel" id="panel-informe-historico">
+      <div class="card">
+        <h2>Informe histórico evolutivo</h2>
+        <p style="font-size:0.9rem;color:var(--muted);margin-bottom:0.8rem;">
+          Genera un informe consolidado a partir de los periodos guardados en el histórico (IndexedDB),
+          incluyendo tablas de resultados y el análisis evolutivo.
+        </p>
+        <div class="row">
+          <div>
+            <label>Desde</label>
+            <input type="month" id="histRepFrom" value="2026-01">
+          </div>
+          <div>
+            <label>Hasta</label>
+            <input type="month" id="histRepTo" value="2026-12">
+          </div>
+          <div style="display:flex;align-items:flex-end;">
+            <button class="btn btn-primary" id="btnGenHistReport">Generar informe histórico</button>
+          </div>
+          <div style="display:flex;align-items:flex-end;">
+            <button class="btn btn-success" id="btnPrintHistReport">Imprimir / PDF</button>
+          </div>
+        </div>
+      </div>
+      <div id="histReportPreview" style="background:#fff;border:1px solid var(--border);padding:1.5rem;max-width:900px;margin:0 auto;box-shadow:var(--shadow);">
+        <p style="text-align:center;color:var(--muted);">Seleccione el rango y pulse «Generar informe histórico».</p>
+      </div>
+    </section>
+
+    <!-- ========== HISTÓRICO ========== -->
+    <section class="panel" id="panel-historico">
+      <div class="card">
+        <h2>Archivo histórico de muestreos</h2>
+        <p style="font-size:0.9rem;color:var(--muted);margin-bottom:0.8rem;">
+          Los periodos se guardan en <strong>IndexedDB</strong> del navegador (persistente, local, sin servidor).
+          Puede guardar el periodo actual, cargar datos retrospectivos o analizar la evolución.
+        </p>
+        <div class="btn-group">
+          <button class="btn btn-primary" id="btnSaveToHistory">Guardar periodo actual en histórico</button>
+          <button class="btn btn-secondary" id="btnLoadRetro">Cargar datos retrospectivos (JSON)</button>
+          <input type="file" id="retroFileInput" accept=".json" style="display:none;" multiple>
+          <button class="btn btn-secondary" id="btnExportHistory">Exportar histórico completo</button>
+          <button class="btn btn-danger btn-sm" id="btnClearHistory">Vaciar histórico</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Periodos almacenados</h2>
+        <div style="overflow-x:auto;">
+          <table class="data" id="historyTable">
+            <thead>
+              <tr>
+                <th>Periodo</th>
+                <th>Puntos</th>
+                <th>Válidos</th>
+                <th>Incidencias</th>
+                <th>Guardado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody">
+              <tr><td colspan="6" style="color:var(--muted);text-align:center;">Sin periodos en el histórico</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Análisis evolutivo</h2>
+        <div class="row">
+          <div>
+            <label>Desde</label>
+            <input type="month" id="chartFrom" value="2026-01">
+          </div>
+          <div>
+            <label>Hasta</label>
+            <input type="month" id="chartTo" value="2026-12">
+          </div>
+          <div>
+            <label>Punto de muestreo</label>
+            <select id="chartPoint"><option value="">— Todos (resumen) —</option></select>
+          </div>
+          <div style="display:flex;align-items:flex-end;">
+            <button class="btn btn-primary" id="btnUpdateCharts">Actualizar gráficos</button>
+          </div>
+        </div>
+        <div style="margin-top:1.2rem;">
+          <h3 style="font-size:0.95rem;color:var(--primary);margin-bottom:0.5rem;">Evolución de aerobios mesófilos (ufc/m³)</h3>
+          <canvas id="chartAerobios" height="120"></canvas>
+        </div>
+        <div style="margin-top:1.5rem;">
+          <h3 style="font-size:0.95rem;color:var(--primary);margin-bottom:0.5rem;">Cumplimiento de bioseguridad por mes (%)</h3>
+          <canvas id="chartCompliance" height="100"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== PROJECT ========== -->
+    <section class="panel" id="panel-project">
+      <div class="card">
+        <h2>Gestión de proyecto</h2>
+        <p style="font-size:0.9rem;margin-bottom:1rem;">
+          Todos los datos se procesan y almacenan localmente en el navegador (localStorage).
+          No se envía información a ningún servidor. Exportar el proyecto periódicamente para copias de seguridad.
+        </p>
+        <div class="btn-group">
+          <button class="btn btn-primary" id="btnSaveProject">Guardar proyecto (localStorage)</button>
+          <button class="btn btn-secondary" id="btnDownloadProject">Descargar archivo .json</button>
+          <button class="btn btn-secondary" id="btnLoadProjectFile">Cargar desde archivo</button>
+          <input type="file" id="projectFileInput" accept=".json" style="display:none;">
+        </div>
+        <div class="btn-group" style="margin-top:1rem;">
+          <button class="btn btn-danger" id="btnResetProject">Reiniciar proyecto (borrar todo)</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Información de privacidad y limitaciones</h2>
+        <ul style="font-size:0.9rem;padding-left:1.2rem;color:var(--muted);">
+          <li>Procesamiento 100 % local. Sin telemetría ni conexiones externas.</li>
+          <li>localStorage puede borrarse al limpiar datos del sitio o cambiar de dispositivo.</li>
+          <li>Exportación PDF mediante el diálogo de impresión del navegador.</li>
+          <li>Importación de PDF mediante PDF.js (librería local en carpeta lib/). Procesamiento 100 % en el navegador.</li>
+          <li>Los umbrales de interpretación son configurables; no constituyen certificación normativa.</li>
+          <li>La aplicación no está validada clínicamente ni certificada.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Instrucciones de uso</h2>
+        <ol style="font-size:0.9rem;padding-left:1.2rem;">
+          <li>Seleccione el periodo (año/mes) en el <strong>Panel</strong>.</li>
+          <li><strong>Importar informes individuales del laboratorio (PDF):</strong>
+            <ul style="margin:0.3rem 0;">
+              <li>Opción rápida: pulse «Cargar demo Agosto 2026» (incluye los 6 informes reales).</li>
+              <li>O arrastre/seleccione los PDF del laboratorio (extracción automática de texto).</li>
+              <li>O pegue el texto / use CSV.</li>
+              <li>O prepare un CSV con columnas: punto;aerobios;hongosNP;hongosPat;fechaRecogida</li>
+            </ul>
+          </li>
+          <li>Revise y corrija en la pestaña <strong>Revisión</strong> (la app aplica automáticamente los criterios del algoritmo).</li>
+          <li>Umbrales del algoritmo en <strong>Configuración</strong> (R4/R3/R2/R1). No invente valores; use los del diagrama oficial.</li>
+          <li>En <strong>Informe</strong> → Generar → Imprimir/PDF o exportar CSV/JSON.</li>
+          <li>Guarde el proyecto (localStorage o archivo .json) antes de cerrar.</li>
+        </ol>
+        <p style="font-size:0.85rem;color:var(--muted);margin-top:0.6rem;">
+          <strong>Flujo ante fallo de BSA:</strong> Calidad → Plan limpieza/desinfección → Notificación Gerencia/Direcciones → 
+          Notificación urgente Lacera (684613400) → Triple desinfección → Remuestreo laboratorio (684612447).
+        </p>
+      </div>
+    </section>
+  </main>
+
+  
+  <!-- Modal Ayuda -->
+  <div class="modal-overlay no-print" id="modalHelp">
+    <div class="modal-box">
+      <button type="button" class="modal-close" data-close-modal>&times;</button>
+      <h2>Ayuda — BSA Manager</h2>
+      <p style="font-size:0.9rem;">Aplicación local para la gestión de informes de bioseguridad ambiental en salas de ambiente controlado hospitalarias.</p>
+      <h3 style="font-size:1rem;color:var(--primary);margin-top:1rem;">Funcionamiento básico</h3>
+      <ol style="font-size:0.9rem;padding-left:1.2rem;">
+        <li>En <strong>Configuración</strong>, indique el nombre del centro y del responsable.</li>
+        <li>Seleccione el periodo (año/mes) en el <strong>Panel de control</strong>.</li>
+        <li>En <strong>Archivos → Importación</strong>, cargue los PDF del laboratorio (o CSV/JSON/demo).</li>
+        <li>Revise los resultados en <strong>Archivos → Revisión</strong>. Si hay incumplimientos, la app muestra una alerta.</li>
+        <li>Genere el <strong>Informe mensual</strong> y exporte a PDF (imprimir) o CSV/JSON.</li>
+        <li>Guarde el periodo en el <strong>Histórico</strong> para análisis evolutivos posteriores.</li>
+      </ol>
+      <h3 style="font-size:1rem;color:var(--primary);margin-top:1rem;">Funcionalidades</h3>
+      <ul>
+        <li>Importación de PDF (PDF.js local), CSV, JSON, pegado de texto y entrada manual.</li>
+        <li>Evaluación automática según algoritmo de bioseguridad (umbrales R1–R4).</li>
+        <li>Alerta inmediata si se superan límites de bioseguridad.</li>
+        <li>Informe mensual con estructura de referencia hospitalaria.</li>
+        <li>Histórico en IndexedDB, carga retrospectiva y gráficos evolutivos.</li>
+        <li>Informe histórico consolidado con análisis evolutivo.</li>
+        <li>Alta de nuevos puntos de muestreo según tipos de instalación (Anexo 1).</li>
+        <li>Guardado de proyecto (localStorage y archivo JSON).</li>
+        <li>Procesamiento 100 % local; sin envío de datos a servidores externos.</li>
+      </ul>
+      <p style="font-size:0.85rem;color:var(--muted);margin-top:1rem;">Los umbrales son configurables. La aplicación no constituye certificación normativa ni validación clínica.</p>
+    </div>
+  </div>
+
+  <!-- Modal Acerca de -->
+  <div class="modal-overlay no-print" id="modalAbout">
+    <div class="modal-box">
+      <button type="button" class="modal-close" data-close-modal>&times;</button>
+      <h2>Acerca de BSA Manager</h2>
+      <p style="font-size:0.95rem;margin-top:0.5rem;"><strong>Desarrollado por:</strong></p>
+      <p style="font-size:1.05rem;font-weight:700;color:var(--primary);">Dr. José Manuel Fernández Carreira</p>
+      <p style="font-size:0.9rem;">Jefe de Servicio de Calidad<br>
+      Área Sanitaria I de Asturias · Dirección Territorial Jarrio</p>
+      <p style="margin-top:0.8rem;font-size:0.9rem;">
+        ORCID: <a href="https://orcid.org/0000-0002-4097-3224" target="_blank" rel="noopener">https://orcid.org/0000-0002-4097-3224</a>
+      </p>
+      <p style="font-size:0.85rem;color:var(--muted);margin-top:1.2rem;">
+        BSA Manager — Gestión de informes de bioseguridad ambiental<br>
+        Versión 1.2 · 2026 · Aplicación local sin telemetría
+      </p>
+    </div>
+  </div>
+
+  <footer class="app-footer no-print">
+    BSA Manager · Dr. José Manuel Fernández Carreira · v1.2 · 2026
+  </footer>
+
+  <script>
+(function () {
+  "use strict";
+
+  // ========== DATOS MAESTROS ==========
+
+  // Catálogo de tipos de instalación (Anexo 1 / algoritmo Hospital de Jarrio)
+  const INSTALLATION_TYPES = [
+    { area: "Quirófanos", tipo: "Quirófano con implantes (OFT, TRA, etc.)", riesgo: "Alto. R4", frecuencia: "MENSUAL", mesesDefault: "1,2,3,4,5,6,7,8,9,10,11,12" },
+    { area: "Quirófanos", tipo: "Quirófano sin implantes", riesgo: "Medio. R3", frecuencia: "MENSUAL", mesesDefault: "1,2,3,4,5,6,7,8,9,10,11,12" },
+    { area: "Quirófanos", tipo: "Quirófano de urgencias", riesgo: "Medio. R3", frecuencia: "MENSUAL", mesesDefault: "1,2,3,4,5,6,7,8,9,10,11,12" },
+    { area: "Críticos / REA / UCI", tipo: "REA / UCI – Box de paciente", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", mesesDefault: "2,5,8,11" },
+    { area: "Críticos / REA / UCI", tipo: "REA / UCI – Control / zona central", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", mesesDefault: "2,5,8,11" },
+    { area: "Críticos / REA / UCI", tipo: "UCI neonatal / pediátrica", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", mesesDefault: "2,5,8,11" },
+    { area: "Endoscopias y procedimientos", tipo: "Sala de endoscopias", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Esterilización", tipo: "Área estéril (proceso y empaquetado)", riesgo: "Medio. R3", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Esterilización", tipo: "Zona limpia / almacenaje de material estéril", riesgo: "Ligero. R1", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" }
+  ];
+
+  // ========== INDEXEDDB HISTÓRICO ==========
+  const IDB_NAME = "BSA_Manager_DB";
+  const IDB_STORE = "periodos";
+  let idb = null;
+  let chartAero = null;
+  let chartComp = null;
+
+  function openIDB() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          const store = db.createObjectStore(IDB_STORE, { keyPath: "id" });
+          store.createIndex("year", "year", { unique: false });
+        }
+      };
+      req.onsuccess = () => { idb = req.result; resolve(idb); };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function idbPutPeriod(periodObj) {
+    const db = idb || await openIDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).put(periodObj);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  async function idbGetAll() {
+    const db = idb || await openIDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, "readonly");
+      const req = tx.objectStore(IDB_STORE).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function idbDelete(id) {
+    const db = idb || await openIDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  async function idbClear() {
+    const db = idb || await openIDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  async function refreshHistoryTable() {
+    const tbody = document.getElementById("historyBody");
+    if (!tbody) return;
+    try {
+      const all = await idbGetAll();
+      all.sort((a, b) => a.id.localeCompare(b.id));
+      if (!all.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);text-align:center;">Sin periodos en el histórico</td></tr>';
+        return;
+      }
+      tbody.innerHTML = all.map(p => {
+        const valid = (p.records || []).filter(r => r.estado === "validado").length;
+        const inc = (p.records || []).filter(r => r.estado === "incidencia").length;
+        const saved = p.savedAt ? new Date(p.savedAt).toLocaleString("es-ES") : "—";
+        return "<tr>" +
+          "<td><strong>" + esc(p.id) + "</strong></td>" +
+          "<td>" + (p.records || []).length + "</td>" +
+          "<td style='color:var(--success)'>" + valid + "</td>" +
+          "<td style='color:var(--danger)'>" + inc + "</td>" +
+          "<td style='font-size:0.8rem'>" + esc(saved) + "</td>" +
+          "<td>" +
+          "<button class='btn btn-sm btn-secondary' data-hid='" + escAttr(p.id) + "' data-hact='load'>Cargar</button> " +
+          "<button class='btn btn-sm btn-danger' data-hid='" + escAttr(p.id) + "' data-hact='del'>X</button>" +
+          "</td></tr>";
+      }).join("");
+      tbody.querySelectorAll("button").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.dataset.hid;
+          if (btn.dataset.hact === "del") {
+            if (!confirm("¿Eliminar del histórico el periodo " + id + "?")) return;
+            await idbDelete(id);
+            log("Histórico: eliminado " + id);
+            refreshHistoryTable();
+            updateChartPointSelect();
+          } else if (btn.dataset.hact === "load") {
+            const all = await idbGetAll();
+            const p = all.find(x => x.id === id);
+            if (!p) return;
+            if (state.records.length && !confirm("Se reemplazarán los datos actuales por el periodo " + id + ". ¿Continuar?")) return;
+            state.year = p.year;
+            state.month = p.month;
+            state.records = JSON.parse(JSON.stringify(p.records || []));
+            document.getElementById("selYear").value = state.year;
+            document.getElementById("selMonth").value = state.month;
+            updateDashboard();
+            updatePeriodInfo();
+            log("Histórico: cargado periodo " + id);
+            alert("Periodo " + id + " cargado en el espacio de trabajo.");
+          }
+        });
+      });
+      updateChartPointSelect();
+    } catch (e) {
+      log("Error histórico: " + e.message);
+    }
+  }
+
+  async function updateChartPointSelect() {
+    const sel = document.getElementById("chartPoint");
+    if (!sel) return;
+    const all = await idbGetAll();
+    const points = new Set();
+    all.forEach(p => (p.records || []).forEach(r => points.add(r.punto)));
+    state.points.forEach(p => points.add(p.nombre));
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">— Todos (resumen cumplimiento) —</option>' +
+      [...points].sort().map(n => '<option value="' + escAttr(n) + '">' + esc(n) + '</option>').join("");
+    if (cur) sel.value = cur;
+  }
+
+  async function updateCharts() {
+    const from = document.getElementById("chartFrom").value; // YYYY-MM
+    const to = document.getElementById("chartTo").value;
+    const pointFilter = document.getElementById("chartPoint").value;
+    const all = await idbGetAll();
+    const periods = all
+      .filter(p => p.id >= from && p.id <= to)
+      .sort((a, b) => a.id.localeCompare(b.id));
+
+    if (typeof Chart === "undefined") {
+      alert("Chart.js no está disponible.");
+      return;
+    }
+
+    // Destruir gráficos previos
+    if (chartAero) { chartAero.destroy(); chartAero = null; }
+    if (chartComp) { chartComp.destroy(); chartComp = null; }
+
+    const labels = periods.map(p => p.id);
+    const compliance = periods.map(p => {
+      const recs = p.records || [];
+      if (!recs.length) return 0;
+      const ok = recs.filter(r => r.estado === "validado").length;
+      return Math.round(100 * ok / recs.length);
+    });
+
+    // Chart cumplimiento
+    const ctxC = document.getElementById("chartCompliance").getContext("2d");
+    chartComp = new Chart(ctxC, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{
+          label: "% cumplimiento BSA",
+          data: compliance,
+          backgroundColor: compliance.map(v => v >= 100 ? "rgba(27,122,61,0.7)" : v >= 80 ? "rgba(184,134,11,0.7)" : "rgba(161,44,44,0.7)")
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: { y: { beginAtZero: true, max: 100, title: { display: true, text: "%" } } },
+        plugins: { legend: { display: false } }
+      }
+    });
+
+    // Chart aerobios
+    const ctxA = document.getElementById("chartAerobios").getContext("2d");
+    let datasets = [];
+    if (pointFilter) {
+      const data = periods.map(p => {
+        const r = (p.records || []).find(x => x.punto === pointFilter);
+        return r && typeof r.aerobios === "number" ? r.aerobios : null;
+      });
+      datasets.push({
+        label: pointFilter,
+        data,
+        borderColor: "#0d4f6b",
+        backgroundColor: "rgba(13,79,107,0.15)",
+        tension: 0.2,
+        spanGaps: true
+      });
+    } else {
+      // promedio de aerobios por mes
+      const data = periods.map(p => {
+        const nums = (p.records || []).map(r => r.aerobios).filter(v => typeof v === "number");
+        if (!nums.length) return null;
+        return Math.round(nums.reduce((a, b) => a + b, 0) / nums.length * 10) / 10;
+      });
+      datasets.push({
+        label: "Promedio aerobios (todos los puntos)",
+        data,
+        borderColor: "#1a7a9c",
+        backgroundColor: "rgba(26,122,156,0.15)",
+        tension: 0.2,
+        spanGaps: true
+      });
+    }
+    chartAero = new Chart(ctxA, {
+      type: "line",
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        scales: { y: { beginAtZero: true, title: { display: true, text: "ufc/m³" } } }
+      }
+    });
+    log("Gráficos actualizados: " + periods.length + " periodos");
+  }
+
+
+  const DEFAULT_POINTS = [
+    { id: "Q1", nombre: "Quirófano 1", riesgo: "Alto. R4", frecuencia: "MENSUAL", meses: [1,2,3,4,5,6,7,8,9,10,11,12], nota: "Implantes (OFT y TRA)" },
+    { id: "Q2", nombre: "Quirófano 2", riesgo: "Medio. R3", frecuencia: "MENSUAL", meses: [1,2,3,4,5,6,7,8,9,10,11,12], nota: "No implantes" },
+    { id: "Q3", nombre: "Quirófano 3", riesgo: "Medio. R3", frecuencia: "MENSUAL", meses: [1,2,3,4,5,6,7,8,9,10,11,12], nota: "No implantes" },
+    { id: "END", nombre: "Endoscopias", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", meses: [1,4,7,10], nota: "" },
+    { id: "EST_EST", nombre: "Esterilización Área Estéril (Proceso y empaquetado)", riesgo: "Medio. R3", frecuencia: "TRIMESTRAL", meses: [1,4,7,10], nota: "Proceso y empaquetado" },
+    { id: "EST_LIM", nombre: "Esterilización Sala Limpio (Zona de almacenaje)", riesgo: "Ligero. R1", frecuencia: "TRIMESTRAL", meses: [1,4,7,10], nota: "Zona de almacenaje" },
+    { id: "REA_C", nombre: "REA Box Control", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", meses: [2,5,8,11], nota: "" },
+    { id: "REA_1", nombre: "REA Box 1", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", meses: [2,5,8,11], nota: "" },
+    { id: "REA_2", nombre: "REA Box 2", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", meses: [2,5,8,11], nota: "" }
+  ];
+
+  // Datos reales extraídos de los 6 informes individuales de laboratorio de agosto 2026
+  const DEMO_AGOSTO = [
+    { punto: "Quirófano 1", nivelRiesgo: "Alto. R4", aerobios: 2, hongosNP: "No detectado", hongosPat: "No detectado", fechaRecogida: "2026-08-25", documentoOrigen: "26362LC01", codigoMuestra: "26352SP01", informeNro: "26362LC01", observaciones: "", estado: "validado" },
+    { punto: "Quirófano 2", nivelRiesgo: "Medio. R3", aerobios: 4, hongosNP: "No detectado", hongosPat: "No detectado", fechaRecogida: "2026-08-25", documentoOrigen: "26362LC02", codigoMuestra: "26352SP02", informeNro: "26362LC02", observaciones: "", estado: "validado" },
+    { punto: "Quirófano 3", nivelRiesgo: "Medio. R3", aerobios: 4, hongosNP: "No detectado", hongosPat: "No detectado", fechaRecogida: "2026-08-25", documentoOrigen: "26362LC03", codigoMuestra: "26352SP03", informeNro: "26362LC03", observaciones: "", estado: "validado" },
+    { punto: "REA Box Control", nivelRiesgo: "Moderado. R2", aerobios: 50, hongosNP: 1, hongosPat: "No detectado", fechaRecogida: "2026-08-25", documentoOrigen: "26362LC04", codigoMuestra: "26352SP04", informeNro: "26362LC04", observaciones: "Identificación: Penicillium. <10 colonias → cumple criterio R2", estado: "validado" },
+    { punto: "REA Box 1", nivelRiesgo: "Moderado. R2", aerobios: 69, hongosNP: "No detectado", hongosPat: "No detectado", fechaRecogida: "2026-08-25", documentoOrigen: "26362LC05", codigoMuestra: "26352SP05", informeNro: "26362LC05", observaciones: "", estado: "validado" },
+    { punto: "REA Box 2", nivelRiesgo: "Moderado. R2", aerobios: 35, hongosNP: "No detectado", hongosPat: "No detectado", fechaRecogida: "2026-08-25", documentoOrigen: "26362LC06", codigoMuestra: "26352SP06", informeNro: "26362LC06", observaciones: "", estado: "validado" }
+  ];
+
+  // Estado de la aplicación
+  const state = {
+    year: 2026,
+    month: "08",
+    records: [],
+    documents: [],
+    points: JSON.parse(JSON.stringify(DEFAULT_POINTS)),
+    config: {
+      // Umbrales según algoritmo de bioseguridad Hospital de Jarrio
+      thrR4: 10,          // Mesófilos <10  (Quirófanos implantes)
+      thrR3: 150,         // Mesófilos <150 (Q2/Q3, Esterilización proceso)
+      thrR2: 200,         // Mesófilos <200 (Endoscopias, REA)
+      thrR1: 200,         // Mesófilos <200 (Esterilización almacenaje)
+      thrHongosR4: 0,     // Ausencia
+      thrHongosR3: 0,     // Ausencia
+      thrHongosR2: 10,    // <10
+      thrHongosR1: 25,    // <25
+      thrHongosPat: 0,    // Ausencia siempre
+      hospital: "Hospital de Jarrio",
+      responsable: "",
+      tipoMuestra: "Aire de ambiente interior"
+    },
+    log: []
+  };
+
+  // ========== UTILIDADES ==========
+  function log(msg) {
+    const ts = new Date().toLocaleTimeString("es-ES");
+    state.log.unshift("[" + ts + "] " + msg);
+    if (state.log.length > 80) state.log.pop();
+    const el = document.getElementById("opLog");
+    if (el) el.textContent = state.log.join("\n");
+  }
+
+  function periodKey() {
+    return state.year + "-" + state.month;
+  }
+
+  function monthName(m) {
+    const names = ["", "enero", "febrero", "marzo", "abril", "mayo", "junio",
+      "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+    return names[parseInt(m, 10)] || m;
+  }
+
+  function findPointDef(nombre) {
+    if (!nombre) return null;
+    const n = nombre.toLowerCase().trim();
+    // Coincidencia exacta o parcial
+    let found = state.points.find(p => p.nombre.toLowerCase() === n);
+    if (found) return found;
+    // REA Control ↔ REA Box Control
+    if (/rea.*control/i.test(n)) return state.points.find(p => /control/i.test(p.nombre));
+    if (/rea.*box\s*1/i.test(n)) return state.points.find(p => /box\s*1/i.test(p.nombre));
+    if (/rea.*box\s*2/i.test(n)) return state.points.find(p => /box\s*2/i.test(p.nombre));
+    if (/quir[oó]fano\s*1/i.test(n)) return state.points.find(p => p.id === "Q1");
+    if (/quir[oó]fano\s*2/i.test(n)) return state.points.find(p => p.id === "Q2");
+    if (/quir[oó]fano\s*3/i.test(n)) return state.points.find(p => p.id === "Q3");
+    // Fallback: primer token
+    return state.points.find(p => n.includes(p.nombre.toLowerCase().split(" ")[0]));
+  }
+
+  function parseNumeric(val) {
+    if (val === null || val === undefined || val === "") return null;
+    if (typeof val === "number") return val;
+    const s = String(val).trim().toLowerCase();
+    if (s === "no detectado" || s === "nd" || s === "n.d." || s === "<ld" || s === "ausente") return "No detectado";
+    const n = parseFloat(s.replace(",", "."));
+    return isNaN(n) ? String(val).trim() : n;
+  }
+
+  function riskCode(riesgo) {
+    if (!riesgo) return null;
+    const r = riesgo.toUpperCase();
+    if (r.includes("R4") || r.includes("ALTO")) return "R4";
+    if (r.includes("R3") || r.includes("MEDIO")) return "R3";
+    if (r.includes("R2") || r.includes("MODERADO")) return "R2";
+    if (r.includes("R1") || r.includes("LIGERO")) return "R1";
+    return null;
+  }
+
+  function evaluateRecord(rec) {
+    // Lógica según algoritmo de bioseguridad (diagrama Hospital de Jarrio)
+    const code = riskCode(rec.nivelRiesgo);
+    const issues = [];
+
+    // Umbral mesófilos según riesgo
+    let thrAero = null;
+    let thrHongos = null;
+    if (code === "R4") { thrAero = state.config.thrR4; thrHongos = state.config.thrHongosR4; }
+    else if (code === "R3") { thrAero = state.config.thrR3; thrHongos = state.config.thrHongosR3; }
+    else if (code === "R2") { thrAero = state.config.thrR2; thrHongos = state.config.thrHongosR2; }
+    else if (code === "R1") { thrAero = state.config.thrR1; thrHongos = state.config.thrHongosR1; }
+
+    // Aerobios mesófilos
+    const aero = rec.aerobios;
+    if (typeof aero === "number" && thrAero !== null && aero >= thrAero) {
+      issues.push("Aerobios mesófilos (" + aero + " ufc/m³) no cumplen criterio <" + thrAero + " para " + code);
+    }
+
+    // Hongos no patógenos (mohos y levaduras)
+    let hnp = rec.hongosNP;
+    if (typeof hnp === "string") {
+      const low = hnp.toLowerCase();
+      if (low === "no detectado" || low === "nd" || low === "ausencia" || low === "") {
+        hnp = 0;
+      } else {
+        const m = hnp.match(/(\d+)/);
+        hnp = m ? parseInt(m[1], 10) : 1;
+      }
+    }
+    if (typeof hnp === "number" && thrHongos !== null) {
+      if (thrHongos === 0 && hnp > 0) {
+        issues.push("Hongos N.P. detectados (" + hnp + "). Se requiere Ausencia para " + code);
+      } else if (thrHongos > 0 && hnp >= thrHongos) {
+        issues.push("Hongos N.P. (" + hnp + ") no cumplen criterio <" + thrHongos + " para " + code);
+      }
+    }
+
+    // Hongos patógenos: siempre Ausencia
+    const hp = rec.hongosPat;
+    if (hp !== null && hp !== undefined) {
+      const low = String(hp).toLowerCase().trim();
+      if (low !== "no detectado" && low !== "nd" && low !== "ausencia" && low !== "" && low !== "-") {
+        const num = parseFloat(low);
+        if (!isNaN(num) && num > 0) {
+          issues.push("Hongos patógenos detectados (" + hp + "). Se requiere Ausencia");
+        } else if (isNaN(num)) {
+          issues.push("Hongos patógenos: " + hp + " (revisar – se requiere Ausencia)");
+        }
+      }
+    }
+
+    if (issues.length > 0) {
+      rec.estado = "incidencia";
+      rec._issues = issues;
+    } else {
+      rec.estado = "validado";
+      rec._issues = [];
+    }
+    return rec;
+  }
+
+  // ========== UI NAV ==========
+  function showPanel(panelId) {
+    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+    const panel = document.getElementById("panel-" + panelId);
+    if (panel) panel.classList.add("active");
+    // Mark active nav
+    document.querySelectorAll("nav.tabs .nav-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll("nav.tabs .dropdown button").forEach(b => b.classList.remove("active-sub"));
+    const topBtn = document.querySelector('nav.tabs > button.nav-btn[data-panel="' + panelId + '"]');
+    if (topBtn) topBtn.classList.add("active");
+    const subBtn = document.querySelector('nav.tabs .dropdown button[data-panel="' + panelId + '"]');
+    if (subBtn) {
+      subBtn.classList.add("active-sub");
+      const parentNav = subBtn.closest(".nav-item");
+      if (parentNav) parentNav.querySelector(".nav-btn").classList.add("active");
+    }
+    // Close dropdowns and mobile menu
+    document.querySelectorAll("nav.tabs .nav-item").forEach(n => n.classList.remove("open"));
+    document.getElementById("mainTabs").classList.remove("mobile-open");
+  }
+
+  document.querySelectorAll("nav.tabs [data-panel]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const pid = btn.dataset.panel;
+      if (pid) showPanel(pid);
+    });
+  });
+
+  document.querySelectorAll("nav.tabs [data-dropdown]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const item = btn.closest(".nav-item");
+      const wasOpen = item.classList.contains("open");
+      document.querySelectorAll("nav.tabs .nav-item").forEach(n => n.classList.remove("open"));
+      if (!wasOpen) item.classList.add("open");
+    });
+  });
+
+  document.addEventListener("click", () => {
+    document.querySelectorAll("nav.tabs .nav-item").forEach(n => n.classList.remove("open"));
+  });
+
+  const burger = document.getElementById("navBurger");
+  if (burger) {
+    burger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      document.getElementById("mainTabs").classList.toggle("mobile-open");
+    });
+  }
+
+  // Modals
+  function openModal(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.add("show");
+  }
+  function closeModals() {
+    document.querySelectorAll(".modal-overlay").forEach(m => m.classList.remove("show"));
+  }
+  document.getElementById("btnHelp")?.addEventListener("click", () => openModal("modalHelp"));
+  document.getElementById("btnAbout")?.addEventListener("click", () => openModal("modalAbout"));
+  document.querySelectorAll("[data-close-modal]").forEach(b => b.addEventListener("click", closeModals));
+  document.querySelectorAll(".modal-overlay").forEach(ov => {
+    ov.addEventListener("click", (e) => { if (e.target === ov) closeModals(); });
+  });
+
+  function updateHeaderMeta() {
+    const h = state.config.hospital || "Centro no definido";
+    const r = state.config.responsable || "Responsable no definido";
+    const el = document.getElementById("headerMeta");
+    if (el) el.textContent = h + " · " + r;
+  }
+
+  // ========== PERIODO ==========
+  function initYearSelect() {
+    const sel = document.getElementById("selYear");
+    sel.innerHTML = "";
+    for (let y = 2024; y <= 2030; y++) {
+      const o = document.createElement("option");
+      o.value = y;
+      o.textContent = y;
+      if (y === state.year) o.selected = true;
+      sel.appendChild(o);
+    }
+    document.getElementById("selMonth").value = state.month;
+  }
+
+  document.getElementById("btnApplyPeriod").addEventListener("click", () => {
+    state.year = parseInt(document.getElementById("selYear").value, 10);
+    state.month = document.getElementById("selMonth").value;
+    log("Periodo aplicado: " + periodKey() + " (" + monthName(state.month) + " " + state.year + ")");
+    updateDashboard();
+    updatePeriodInfo();
+  });
+
+  function updatePeriodInfo() {
+    const m = parseInt(state.month, 10);
+    const expected = state.points.filter(p => p.meses.includes(m));
+    const info = document.getElementById("periodInfo");
+    info.innerHTML = "Periodo <strong>" + monthName(state.month) + " " + state.year + "</strong>. " +
+      "Puntos esperados según calendario: <strong>" + expected.length + "</strong> (" +
+      expected.map(p => p.nombre).join(", ") + ").";
+  }
+
+  // ========== DASHBOARD ==========
+  function updateDashboard() {
+    document.getElementById("statPeriod").textContent = monthName(state.month).substring(0, 3) + " " + state.year;
+    document.getElementById("statPoints").textContent = state.records.length;
+    document.getElementById("statDocs").textContent = state.documents.length || (state.records.length ? "—" : 0);
+
+    let valid = 0, inc = 0, pend = 0;
+    state.records.forEach(r => {
+      evaluateRecord(r);
+      if (r.estado === "validado") valid++;
+      else if (r.estado === "incidencia") inc++;
+      else pend++;
+    });
+    document.getElementById("statValid").textContent = valid;
+    document.getElementById("statInc").textContent = inc;
+
+    const statusEl = document.getElementById("statStatus");
+    const card = document.getElementById("statStatusCard");
+    card.classList.remove("ok", "warn", "danger");
+    if (state.records.length === 0) {
+      statusEl.textContent = "Vacío";
+    } else if (inc > 0) {
+      statusEl.textContent = "Incidencias";
+      card.classList.add("danger");
+    } else if (pend > 0) {
+      statusEl.textContent = "Pendiente";
+      card.classList.add("warn");
+    } else {
+      statusEl.textContent = "OK";
+      card.classList.add("ok");
+    }
+
+    // Validation summary
+    const vs = document.getElementById("validationSummary");
+    if (state.records.length === 0) {
+      vs.innerHTML = "<p style='color:var(--muted);'>Sin registros. Importe datos o cargue la demo.</p>";
+    } else {
+      let html = "<ul style='padding-left:1.2rem;font-size:0.9rem;'>";
+      html += "<li>Registros totales: <strong>" + state.records.length + "</strong></li>";
+      html += "<li>Validados: <strong style='color:var(--success)'>" + valid + "</strong></li>";
+      html += "<li>Incidencias: <strong style='color:var(--danger)'>" + inc + "</strong></li>";
+      html += "<li>Pendientes de revisión: <strong>" + pend + "</strong></li>";
+      if (inc > 0) {
+        html += "</ul><div class='alert alert-danger' style='margin-top:0.8rem;'>Existen incidencias. Revise la pestaña Revisión antes de emitir el informe definitivo.</div>";
+      } else {
+        html += "</ul><div class='alert alert-success' style='margin-top:0.8rem;'>No hay incidencias bloqueantes según los umbrales configurados.</div>";
+      }
+      vs.innerHTML = html;
+    }
+
+    renderReviewTable();
+  }
+
+  // ========== IMPORT ==========
+  const fileDrop = document.getElementById("fileDrop");
+  const fileInput = document.getElementById("fileInput");
+
+  fileDrop.addEventListener("click", () => fileInput.click());
+  fileDrop.addEventListener("dragover", e => { e.preventDefault(); fileDrop.classList.add("dragover"); });
+  fileDrop.addEventListener("dragleave", () => fileDrop.classList.remove("dragover"));
+  fileDrop.addEventListener("drop", e => {
+    e.preventDefault();
+    fileDrop.classList.remove("dragover");
+    handleFiles(e.dataTransfer.files);
+  });
+  fileInput.addEventListener("change", () => handleFiles(fileInput.files));
+
+  // Configurar worker de PDF.js (local)
+  if (typeof pdfjsLib !== "undefined") {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "lib/pdf.worker.min.js";
+  }
+
+  async function extractTextFromPDF(arrayBuffer) {
+    if (typeof pdfjsLib === "undefined") {
+      throw new Error("PDF.js no está cargado. Compruebe la carpeta lib/.");
+    }
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let fullText = "";
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const strings = content.items.map(item => item.str);
+      fullText += strings.join(" ") + "\n";
+    }
+    return fullText;
+  }
+
+  function checkAndAlertIncidences(beforeCount) {
+    const newRecs = state.records.slice(beforeCount);
+    const incs = newRecs.filter(r => r.estado === "incidencia");
+    if (incs.length > 0) {
+      const msg = "⚠ ALERTA DE BIOSEGURIDAD\n\n" +
+        incs.length + " punto(s) superan los límites de bioseguridad:\n\n" +
+        incs.map(r => "• " + r.punto + ": " + (r._issues || []).join("; ")).join("\n") +
+        "\n\nRevise la pestaña Revisión y active el protocolo si corresponde.";
+      alert(msg);
+      log("ALERTA: " + incs.length + " incidencia(s) detectada(s) tras importación");
+    }
+  }
+
+  async function handleFiles(files) {
+    const before = state.records.length;
+    for (const f of Array.from(files)) {
+      const name = f.name;
+      try {
+        if (name.toLowerCase().endsWith(".pdf")) {
+          const buffer = await f.arrayBuffer();
+          const text = await extractTextFromPDF(buffer);
+          log("PDF leído: " + name + " (" + text.length + " caracteres de texto)");
+          const n = tryParseLabReport(text, name);
+          if (!n) {
+            // fallback: intentar como texto genérico
+            importCSV(text, name);
+          }
+          state.documents.push({ name, date: new Date().toISOString() });
+          log("Importado PDF: " + name);
+        } else {
+          const text = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = ev => resolve(ev.target.result);
+            reader.onerror = reject;
+            reader.readAsText(f, "UTF-8");
+          });
+          if (name.toLowerCase().endsWith(".json")) {
+            importJSON(JSON.parse(text), name);
+          } else {
+            importCSV(text, name);
+          }
+          state.documents.push({ name, date: new Date().toISOString() });
+          log("Importado: " + name);
+        }
+      } catch (err) {
+        log("ERROR al importar " + name + ": " + err.message);
+        alert("Error al procesar " + name + ": " + err.message);
+      }
+    }
+    fileInput.value = "";
+    updateDashboard();
+    checkAndAlertIncidences(before);
+  }
+
+  /** Intenta extraer un registro del formato de informe individual de laboratorio (texto copiado del PDF) */
+  function tryParseLabReport(text, origen) {
+    const t = text.replace(/\r/g, "");
+    // Detectar si parece un informe de laboratorio de aire
+    if (!/INFORME\s*(N[º°]|No|Nº|#)?\s*:?\s*\d/i.test(t) && !/Aerobios\s*mes[oó]filos/i.test(t)) {
+      return null;
+    }
+    let punto = "";
+    let m = t.match(/Denominaci[oó]n\s*[:\t]\s*(.+)/i);
+    if (m) punto = m[1].trim().split(/\n/)[0].trim();
+    if (!punto) {
+      m = t.match(/(?:Quir[oó]fano\s*[123]|REA\s*(?:Box\s*)?[12]|REA\s*Control|Endoscopias|Esterilizaci[oó]n[^\n]*)/i);
+      if (m) punto = m[0].trim();
+    }
+    // Normalizar nombres
+    if (/REA\s*Control/i.test(punto) && !/Box/i.test(punto)) punto = "REA Box Control";
+    if (/REA\s*Box\s*1/i.test(punto)) punto = "REA Box 1";
+    if (/REA\s*Box\s*2/i.test(punto)) punto = "REA Box 2";
+
+    let aerobios = null, hongosNP = "No detectado", hongosPat = "No detectado", identNP = "";
+    // Aerobios
+    m = t.match(/Aerobios\s*mes[oó]filos\s*(?:totales)?\s*[|\t:\s]+(\d+(?:[.,]\d+)?|No\s*detectado)/i);
+    if (m) aerobios = parseNumeric(m[1]);
+    // Hongos NP – puede ir con identificación en la misma línea o siguiente
+    m = t.match(/Hongos\s*No\s*Pat[oó]genos\s*(?:\(N\.?P\.?\))?\s*[|\t:\s]+(\d+|No\s*detectado)(?:\s*[|\t]\s*([A-Za-z]+))?/i);
+    if (m) {
+      hongosNP = parseNumeric(m[1]);
+      if (m[2] && m[2].toLowerCase() !== "pnt") identNP = m[2];
+    }
+    // Si hay "Penicillium" en el texto cerca de hongos
+    if (/Penicillium/i.test(t) && (hongosNP === 0 || hongosNP === "No detectado" || hongosNP === null)) {
+      const pm = t.match(/(\d+)\s*[|\t].*?Penicillium|Penicillium.*?(\d+)/i);
+      if (pm) hongosNP = parseInt(pm[1] || pm[2], 10);
+      else hongosNP = 1;
+      identNP = "Penicillium";
+    }
+    // Hongos patógenos
+    m = t.match(/Hongos\s*Pat[oó]genos\s*[|\t:\s]+(\d+|No\s*detectado)/i);
+    if (m) hongosPat = parseNumeric(m[1]);
+
+    let fecha = "";
+    m = t.match(/Fecha\s*de\s*recogida\s*[:\t]\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i);
+    if (m) {
+      const p = m[1].split(/[\/\-]/);
+      if (p[2].length === 4) fecha = p[2] + "-" + p[1].padStart(2,"0") + "-" + p[0].padStart(2,"0");
+      else fecha = "20" + p[2] + "-" + p[1].padStart(2,"0") + "-" + p[0].padStart(2,"0");
+    }
+    let informeNro = "";
+    m = t.match(/INFORME\s*(?:N[º°]|No|Nº|#)?\s*:?\s*(\d+\w*)/i);
+    if (m) informeNro = m[1];
+
+    if (!punto && aerobios === null) return null;
+
+    const def = findPointDef(punto);
+    const rec = {
+      punto: punto || "Desconocido",
+      nivelRiesgo: def ? def.riesgo : "",
+      aerobios: aerobios,
+      hongosNP: hongosNP,
+      hongosPat: hongosPat,
+      fechaRecogida: fecha || (state.year + "-" + state.month + "-15"),
+      documentoOrigen: origen || (informeNro ? "Lab " + informeNro : "Texto laboratorio"),
+      informeNro: informeNro,
+      observaciones: identNP ? "Identificación: " + identNP : "",
+      estado: "pendiente"
+    };
+    evaluateRecord(rec);
+    state.records.push(rec);
+    return 1;
+  }
+
+  function importCSV(text, origen) {
+    // Primero intentar formato de laboratorio (texto de PDF)
+    const nEuro = tryParseLabReport(text, origen);
+    if (nEuro) {
+      log("Laboratorio: 1 registro extraído desde " + (origen || "texto"));
+      return;
+    }
+
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) throw new Error("No se reconocieron datos (ni CSV ni formato de informe de laboratorio)");
+    const sep = lines[0].includes(";") ? ";" : ",";
+    const headers = lines[0].split(sep).map(h => h.trim().toLowerCase().replace(/['"]/g, ""));
+    let count = 0;
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(sep).map(c => c.trim().replace(/^["']|["']$/g, ""));
+      if (cols.every(c => !c)) continue;
+      const get = (keys) => {
+        for (const k of keys) {
+          const idx = headers.findIndex(h => h.includes(k));
+          if (idx >= 0 && cols[idx] !== undefined) return cols[idx];
+        }
+        return "";
+      };
+      const punto = get(["punto", "recogida", "instalacion", "sala", "ubicacion", "denominacion"]);
+      if (!punto) continue;
+      const def = findPointDef(punto);
+      const rec = {
+        punto: punto,
+        nivelRiesgo: get(["riesgo", "nivel"]) || (def ? def.riesgo : ""),
+        aerobios: parseNumeric(get(["aerobios", "mesofilos", "mesófilos", "ufc"])),
+        hongosNP: parseNumeric(get(["hongos np", "hongos no", "no patogenos", "no patógenos", "n.p."])) || "No detectado",
+        hongosPat: parseNumeric(get(["hongos pat", "patogenos", "patógenos"])) || "No detectado",
+        fechaRecogida: get(["fecha", "recogida", "muestreo"]) || (state.year + "-" + state.month + "-15"),
+        documentoOrigen: origen || "CSV",
+        observaciones: get(["obs", "observaciones", "notas"]) || "",
+        estado: "pendiente"
+      };
+      evaluateRecord(rec);
+      state.records.push(rec);
+      count++;
+    }
+    if (count === 0) throw new Error("No se extrajeron registros. Compruebe el formato o use la demo.");
+    log("CSV: " + count + " registros añadidos desde " + (origen || "texto"));
+  }
+
+  function importJSON(data, origen) {
+    let arr = Array.isArray(data) ? data : (data.records || data.datos || []);
+    if (!Array.isArray(arr)) throw new Error("JSON no contiene un array de registros");
+    arr.forEach(item => {
+      const punto = item.punto || item.nombre || item.puntoRecogida || "";
+      if (!punto) return;
+      const def = findPointDef(punto);
+      const rec = {
+        punto,
+        nivelRiesgo: item.nivelRiesgo || item.riesgo || (def ? def.riesgo : ""),
+        aerobios: parseNumeric(item.aerobios ?? item.aerobiosMesofilos),
+        hongosNP: parseNumeric(item.hongosNP ?? item.hongosNoPatogenos) || "No detectado",
+        hongosPat: parseNumeric(item.hongosPat ?? item.hongosPatogenos) || "No detectado",
+        fechaRecogida: item.fechaRecogida || item.fecha || (state.year + "-" + state.month + "-15"),
+        documentoOrigen: origen || item.documentoOrigen || "JSON",
+        observaciones: item.observaciones || "",
+        estado: item.estado || "pendiente"
+      };
+      evaluateRecord(rec);
+      state.records.push(rec);
+    });
+    if (data.config) Object.assign(state.config, data.config);
+    if (data.year) state.year = data.year;
+    if (data.month) state.month = data.month;
+    log("JSON: " + arr.length + " registros importados");
+  }
+
+  // Demo
+  document.getElementById("btnLoadDemo").addEventListener("click", () => {
+    if (state.records.length && !confirm("Se añadirán los datos de agosto 2026. ¿Continuar?")) return;
+    state.year = 2026;
+    state.month = "08";
+    document.getElementById("selYear").value = 2026;
+    document.getElementById("selMonth").value = "08";
+    DEMO_AGOSTO.forEach(d => {
+      const rec = Object.assign({}, d);
+      evaluateRecord(rec);
+      state.records.push(rec);
+    });
+    state.documents.push({ name: "Informe Definitivo Agosto 2026", date: new Date().toISOString() });
+    log("Cargada demostración Agosto 2026 (" + DEMO_AGOSTO.length + " registros)");
+    updateDashboard();
+    updatePeriodInfo();
+  });
+
+  // Manual
+  document.getElementById("btnAddManual").addEventListener("click", () => {
+    document.getElementById("manualCard").style.display = "block";
+    const sel = document.getElementById("manPunto");
+    sel.innerHTML = state.points.map(p => "<option value=\"" + p.nombre + "\">" + p.nombre + "</option>").join("");
+    document.getElementById("manRiesgo").value = state.points[0].riesgo;
+    document.getElementById("manFecha").value = state.year + "-" + state.month + "-15";
+  });
+  document.getElementById("manPunto").addEventListener("change", () => {
+    const def = state.points.find(p => p.nombre === document.getElementById("manPunto").value);
+    if (def) document.getElementById("manRiesgo").value = def.riesgo;
+  });
+  document.getElementById("btnCancelManual").addEventListener("click", () => {
+    document.getElementById("manualCard").style.display = "none";
+  });
+  document.getElementById("btnSaveManual").addEventListener("click", () => {
+    const rec = {
+      punto: document.getElementById("manPunto").value,
+      nivelRiesgo: document.getElementById("manRiesgo").value,
+      aerobios: parseNumeric(document.getElementById("manAerobios").value),
+      hongosNP: parseNumeric(document.getElementById("manHongosNP").value) || "No detectado",
+      hongosPat: parseNumeric(document.getElementById("manHongosPat").value) || "No detectado",
+      fechaRecogida: document.getElementById("manFecha").value || (state.year + "-" + state.month + "-15"),
+      documentoOrigen: "Entrada manual",
+      observaciones: document.getElementById("manObs").value || "",
+      estado: "pendiente"
+    };
+    evaluateRecord(rec);
+    state.records.push(rec);
+    log("Registro manual añadido: " + rec.punto);
+    document.getElementById("manualCard").style.display = "none";
+    updateDashboard();
+    if (rec.estado === "incidencia") {
+      alert("⚠ ALERTA DE BIOSEGURIDAD\n\n" + rec.punto + ":\n" + (rec._issues || []).join("\n"));
+    }
+  });
+
+  // Paste
+  document.getElementById("btnPasteCSV").addEventListener("click", () => {
+    document.getElementById("pasteCard").style.display = "block";
+  });
+  document.getElementById("btnCancelPaste").addEventListener("click", () => {
+    document.getElementById("pasteCard").style.display = "none";
+  });
+  document.getElementById("btnProcessPaste").addEventListener("click", () => {
+    const text = document.getElementById("pasteArea").value.trim();
+    if (!text) return;
+    try {
+      const before = state.records.length;
+      if (text.startsWith("{") || text.startsWith("[")) {
+        importJSON(JSON.parse(text), "Texto pegado");
+      } else {
+        importCSV(text, "Texto pegado");
+      }
+      document.getElementById("pasteCard").style.display = "none";
+      document.getElementById("pasteArea").value = "";
+      updateDashboard();
+      checkAndAlertIncidences(before);
+    } catch (err) {
+      alert("Error: " + err.message);
+      log("ERROR pegado: " + err.message);
+    }
+  });
+
+  // ========== REVIEW TABLE ==========
+  function renderReviewTable() {
+    const tbody = document.getElementById("reviewBody");
+    const filter = (document.getElementById("filterText").value || "").toLowerCase();
+    const estFilter = document.getElementById("filterEstado").value;
+    tbody.innerHTML = "";
+    let shown = 0;
+    state.records.forEach((rec, idx) => {
+      if (filter && !rec.punto.toLowerCase().includes(filter)) return;
+      if (estFilter && rec.estado !== estFilter) return;
+      shown++;
+      const tr = document.createElement("tr");
+      if (rec.estado === "incidencia") tr.classList.add("inc");
+      else if (rec.estado === "validado") tr.classList.add("ok");
+
+      const badgeClass = rec.estado === "validado" ? "badge-ok" : (rec.estado === "incidencia" ? "badge-danger" : "badge-warn");
+      tr.innerHTML =
+        "<td>" + esc(rec.punto) + "</td>" +
+        "<td>" + esc(rec.nivelRiesgo) + "</td>" +
+        "<td>" + esc(rec.fechaRecogida) + "</td>" +
+        "<td><input type='text' data-idx='" + idx + "' data-field='aerobios' value='" + escAttr(fmtVal(rec.aerobios)) + "'></td>" +
+        "<td><input type='text' data-idx='" + idx + "' data-field='hongosNP' value='" + escAttr(fmtVal(rec.hongosNP)) + "'></td>" +
+        "<td><input type='text' data-idx='" + idx + "' data-field='hongosPat' value='" + escAttr(fmtVal(rec.hongosPat)) + "'></td>" +
+        "<td><span class='badge " + badgeClass + "'>" + esc(rec.estado) + "</span></td>" +
+        "<td style='font-size:0.8rem'>" + esc(rec.documentoOrigen || "") + "</td>" +
+        "<td><button class='btn btn-sm btn-secondary' data-action='reval' data-idx='" + idx + "'>Reval.</button> " +
+        "<button class='btn btn-sm btn-danger' data-action='del' data-idx='" + idx + "'>X</button></td>";
+      tbody.appendChild(tr);
+    });
+    document.getElementById("reviewCount").textContent = shown + " registros mostrados (total " + state.records.length + ")";
+
+    tbody.querySelectorAll("input").forEach(inp => {
+      inp.addEventListener("change", () => {
+        const i = parseInt(inp.dataset.idx, 10);
+        const field = inp.dataset.field;
+        state.records[i][field] = parseNumeric(inp.value);
+        evaluateRecord(state.records[i]);
+        log("Editado " + field + " de " + state.records[i].punto);
+        updateDashboard();
+      });
+    });
+    tbody.querySelectorAll("button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const i = parseInt(btn.dataset.idx, 10);
+        if (btn.dataset.action === "del") {
+          if (confirm("¿Eliminar registro de " + state.records[i].punto + "?")) {
+            log("Eliminado: " + state.records[i].punto);
+            state.records.splice(i, 1);
+            updateDashboard();
+          }
+        } else if (btn.dataset.action === "reval") {
+          evaluateRecord(state.records[i]);
+          state.records[i].estado = state.records[i]._issues && state.records[i]._issues.length ? "incidencia" : "validado";
+          updateDashboard();
+        }
+      });
+    });
+  }
+
+  function fmtVal(v) {
+    if (v === null || v === undefined) return "";
+    return String(v);
+  }
+  function esc(s) {
+    if (s == null) return "";
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function escAttr(s) {
+    return esc(s).replace(/"/g, "&quot;");
+  }
+
+  document.getElementById("filterText").addEventListener("input", renderReviewTable);
+  document.getElementById("filterEstado").addEventListener("change", renderReviewTable);
+  document.getElementById("btnRefreshTable").addEventListener("click", () => { updateDashboard(); });
+  document.getElementById("btnClearAll").addEventListener("click", () => {
+    if (confirm("¿Eliminar TODOS los registros del periodo actual?")) {
+      state.records = [];
+      state.documents = [];
+      log("Datos vaciados");
+      updateDashboard();
+    }
+  });
+
+  // ========== CONFIG ==========
+  function renderPointsTable() {
+    const tbody = document.getElementById("pointsBody");
+    tbody.innerHTML = state.points.map((p, i) =>
+      "<tr>" +
+      "<td>" + esc(p.nombre) + "</td>" +
+      "<td><input type='text' data-pi='" + i + "' data-pf='riesgo' value='" + escAttr(p.riesgo) + "'></td>" +
+      "<td>" + esc(p.frecuencia) + "</td>" +
+      "<td><input type='text' data-pi='" + i + "' data-pf='meses' value='" + p.meses.join(",") + "' style='max-width:140px'></td>" +
+      "</tr>"
+    ).join("");
+    tbody.querySelectorAll("input").forEach(inp => {
+      inp.addEventListener("change", () => {
+        const i = parseInt(inp.dataset.pi, 10);
+        if (inp.dataset.pf === "riesgo") state.points[i].riesgo = inp.value;
+        if (inp.dataset.pf === "meses") {
+          state.points[i].meses = inp.value.split(",").map(x => parseInt(x.trim(), 10)).filter(n => n >= 1 && n <= 12);
+        }
+      });
+    });
+  }
+
+  document.getElementById("btnSaveConfig").addEventListener("click", () => {
+    state.config.thrR4 = parseFloat(document.getElementById("thrR4").value) || 10;
+    state.config.thrR3 = parseFloat(document.getElementById("thrR3").value) || 150;
+    state.config.thrR2 = parseFloat(document.getElementById("thrR2").value) || 200;
+    state.config.thrR1 = parseFloat(document.getElementById("thrR1").value) || 200;
+    state.config.thrHongosR4 = parseFloat(document.getElementById("thrHongosR4").value) || 0;
+    state.config.thrHongosR3 = parseFloat(document.getElementById("thrHongosR3").value) || 0;
+    state.config.thrHongosR2 = parseFloat(document.getElementById("thrHongosR2").value) || 10;
+    state.config.thrHongosR1 = parseFloat(document.getElementById("thrHongosR1").value) || 25;
+    state.config.thrHongosPat = 0;
+    state.config.hospital = document.getElementById("cfgHospital").value || "Hospital de Jarrio";
+    state.config.responsable = document.getElementById("cfgResponsable").value || "";
+    state.config.tipoMuestra = document.getElementById("cfgTipoMuestra").value || "Aire de ambiente interior";
+    state.records.forEach(evaluateRecord);
+    log("Configuración guardada (umbrales algoritmo)");
+    updateDashboard();
+    updateHeaderMeta();
+    alert("Configuración guardada. Los registros se han reevaluado según el algoritmo.");
+  });
+
+  document.getElementById("btnResetConfig").addEventListener("click", () => {
+    document.getElementById("thrR4").value = 10;
+    document.getElementById("thrR3").value = 150;
+    document.getElementById("thrR2").value = 200;
+    document.getElementById("thrR1").value = 200;
+    document.getElementById("thrHongosR4").value = 0;
+    document.getElementById("thrHongosR3").value = 0;
+    document.getElementById("thrHongosR2").value = 10;
+    document.getElementById("thrHongosR1").value = 25;
+    document.getElementById("cfgHospital").value = "Hospital de Jarrio";
+    if (document.getElementById("cfgResponsable")) document.getElementById("cfgResponsable").value = "";
+    document.getElementById("cfgTipoMuestra").value = "Aire de ambiente interior";
+  });
+
+  // ========== REPORT ==========
+  document.getElementById("btnGenerateReport").addEventListener("click", generateReport);
+
+  function generateReport() {
+    const preview = document.getElementById("reportPreview");
+    const hospital = state.config.hospital;
+    const tipo = state.config.tipoMuestra;
+    const periodoTxt = monthName(state.month) + " " + state.year;
+    const fechaInforme = new Date().toLocaleDateString("es-ES");
+
+    // Fechas de recogida
+    const fechas = [...new Set(state.records.map(r => r.fechaRecogida).filter(Boolean))];
+    const fechaRecogida = fechas.length === 1 ? formatDateES(fechas[0]) : (fechas.map(formatDateES).join(", ") || "—");
+
+    let html = "";
+    const responsable = state.config.responsable || "";
+    html += "<h1>RESULTADOS DEFINITIVOS de análisis microbiológico de seguridad ambiental.</h1>";
+    html += "<p class='subtitle'>Informe " + fechaInforme + "</p>";
+    html += "<p style='text-align:center;font-weight:600;'>" + esc(hospital) + "</p>";
+    if (responsable) html += "<p style='text-align:center;font-size:0.9rem;'>Responsable: " + esc(responsable) + "</p>";
+    html += "<p style='text-align:center;margin-bottom:1.2rem;'>Muestreo " + periodoTxt + "</p>";
+
+    html += "<h2>Resultados</h2>";
+    html += "<table class='meta-table'><tr><td><strong>Tipo de muestra</strong></td><td>" + esc(tipo) + "</td></tr>";
+    html += "<tr><td><strong>Fecha de recogida</strong></td><td>" + esc(fechaRecogida) + "</td></tr>";
+    html += "<tr><td><strong>Fecha informe</strong></td><td>" + esc(fechaInforme) + "</td></tr></table>";
+
+    html += "<table><thead><tr>";
+    html += "<th>Punto de recogida</th><th>Nivel de riesgo</th>";
+    html += "<th>Aerobios mesófilos totales<br>ufc/m³</th>";
+    html += "<th>Hongos No Patógenos (N.P.)</th><th>Hongos Patógenos</th>";
+    html += "</tr></thead><tbody>";
+
+    if (state.records.length === 0) {
+      html += "<tr><td colspan='5' style='text-align:center;color:#888;'>Sin registros para este periodo</td></tr>";
+    } else {
+      state.records.forEach(r => {
+        html += "<tr>";
+        html += "<td>" + esc(r.punto) + "</td>";
+        html += "<td>" + esc(r.nivelRiesgo) + "</td>";
+        html += "<td><strong>" + esc(fmtVal(r.aerobios)) + "</strong></td>";
+        html += "<td>" + esc(fmtVal(r.hongosNP)) + "</td>";
+        html += "<td>" + esc(fmtVal(r.hongosPat)) + "</td>";
+        html += "</tr>";
+      });
+    }
+    html += "</tbody></table>";
+
+    // Conclusiones automáticas basadas en datos
+    const incidencias = state.records.filter(r => r.estado === "incidencia");
+    const validados = state.records.filter(r => r.estado === "validado");
+    const puntosOK = validados.map(r => r.punto);
+
+    html += "<div class='conclusion'>";
+    if (state.records.length === 0) {
+      html += "<p>No hay datos de muestreo para el periodo seleccionado.</p>";
+    } else if (incidencias.length === 0) {
+      html += "<p><strong>Se confirma Bioseguridad ambiental</strong> en los puntos analizados: " +
+        esc(puntosOK.join(", ")) + ".</p>";
+    } else {
+      html += "<p><strong>Se detectan incidencias</strong> en: " +
+        esc(incidencias.map(r => r.punto).join(", ")) +
+        ". Los puntos sin incidencia confirman bioseguridad: " +
+        esc(puntosOK.join(", ") || "ninguno") + ".</p>";
+      incidencias.forEach(r => {
+        if (r._issues && r._issues.length) {
+          html += "<p style='font-size:0.9rem;'>• " + esc(r.punto) + ": " + esc(r._issues.join("; ")) + "</p>";
+        }
+      });
+    }
+    html += "</div>";
+
+    // Recomendaciones (basadas en el informe de referencia)
+    html += "<div class='recomendaciones'>";
+    html += "<p>Sigue siendo opcional el conteo de aerobios mesófilos en la actualidad para el control de la BS. ";
+    html += "Aunque el conteo de mesófilos no supera los límites orientativos configurados, se recomiendan no obstante las siguientes medidas para mantener la bioseguridad ambiental:</p>";
+    html += "<ol><li><strong>Control apropiado de puertas de acceso</strong></li>";
+    html += "<li><strong>Uso apropiado de uniformes y en especial mascarillas</strong> (la presencia de mesófilos es atribuible habitualmente a la conversación hablada sin mascarillas)</li></ol>";
+    html += "</div>";
+
+    // Criterios del algoritmo
+    html += "<div class='anexo'>";
+    html += "<h2>Criterios de interpretación (algoritmo Hospital de Jarrio)</h2>";
+    html += "<table style='font-size:0.85rem;'><thead><tr><th>Área</th><th>Riesgo</th><th>Mesófilos</th><th>Mohos y levaduras</th><th>Patógenos</th></tr></thead><tbody>";
+    html += "<tr><td>Quirófanos implantes Q1</td><td>R4 Alto</td><td>&lt;10</td><td>Ausencia</td><td>Ausencia</td></tr>";
+    html += "<tr><td>Quirófanos Q2/Q3 · Esterilización proceso</td><td>R3 Medio</td><td>&lt;150</td><td>Ausencia</td><td>Ausencia</td></tr>";
+    html += "<tr><td>Endoscopias · REA Box 1-2 · Control</td><td>R2 Moderado</td><td>&lt;200</td><td>&lt;10</td><td>Ausencia</td></tr>";
+    html += "<tr><td>Esterilización zona almacenaje</td><td>R1 Ligero</td><td>&lt;200</td><td>&lt;25</td><td>Ausencia</td></tr>";
+    html += "</tbody></table>";
+    html += "<p style='font-size:0.85rem;margin-top:0.5rem;'>Si se cumplen → <strong>Se cumplen criterios de Bioseguridad Ambiental</strong> → Mantener medidas preventivas.<br>";
+    html += "Si no se cumplen → <strong>NO se cumplen criterios</strong> → Activar plan de limpieza y desinfección (ver Anexo 2).</p>";
+
+    html += "<h2>Anexo 1: Esquema de interpretación (normativa)</h2>";
+    html += "<p>Se determina el nivel de riesgo correspondiente a la sala analizada según UNE 171340:2020. ";
+    html += "Una vez definido el nivel de riesgo, se aplican los parámetros ambientales de las normas UNE 100713:2005 y UNE 171340:2020 ";
+    html += "(instalación en modo reposo / operacional / stand-by / en funcionamiento).</p>";
+    html += "<p><em>Fuente: Norma Española UNE 171340 Julio 2020. Validación y cualificación de salas de ambiente controlado en hospitales.</em></p>";
+
+    html += "<h2>Anexo 2: Protocolo de actuación ante fallo de BSA</h2>";
+    html += "<p><strong>PROTOCOLO DE ACTUACIÓN ANTE INCUMPLIMIENTO DE CRITERIOS DE BIOSEGURIDAD AMBIENTAL</strong></p>";
+    html += "<ol style='font-size:0.88rem;'>";
+    html += "<li><strong>Calidad</strong> activa el plan de limpieza y desinfección.</li>";
+    html += "<li>Notificación a Gerencia, Dirección asistencial, Dirección de Enfermería y Dirección de Gestión.</li>";
+    html += "<li>Coordinadora área quirúrgica / Supervisora UVI-REA.</li>";
+    html += "<li><strong>Notificación urgente a Lacera</strong> (Tfn: 684613400) → Inicio inmediato de <em>triple desinfección*</em>.</li>";
+    html += "<li>Reajuste de actividad asistencial hasta confirmar BSA (previsión suspensión 24-48 h desde aviso a Lacera).</li>";
+    html += "<li>Posible suspensión de actividad en áreas afectadas o modificación/reubicación estratégica.</li>";
+    html += "<li>Tras finalizar limpieza → Calidad → Solicitud de remuestreo (Tfn laboratorio: 684612447).</li>";
+    html += "</ol>";
+    html += "<p style='font-size:0.85rem;'>* <strong>Triple desinfección:</strong> Triple limpieza con dilución de hipoclorito sódico (9 partes de agua / 1 de lejía) en limpieza terminal ";
+    html += "(superficies horizontales y verticales), incluyendo dispositivos médicos y fungibles. Intervalos mínimos de 90 minutos entre las 3. ";
+    html += "Limpieza de rejillas por inmersión y pulverización del tramo de conducto accesible. Finalizar con NDP Air Total+ GLP CE. ";
+    html += "Los intervalos pueden incrementarse según circunstancias (ej. existencia de polvo).</p>";
+    html += "</div>";
+
+    // Pie de trazabilidad
+    html += "<p style='margin-top:2rem;font-size:0.8rem;color:#666;border-top:1px solid #ccc;padding-top:0.6rem;'>";
+    html += "Generado por BSA Manager (Dr. José Manuel Fernández Carreira) · Periodo " + periodKey() +
+      " · " + state.records.length + " registros · Umbrales configurables · No constituye certificación normativa.";
+    html += "</p>";
+
+    preview.innerHTML = html;
+    document.getElementById("reportStatus").textContent = "Generado " + new Date().toLocaleTimeString("es-ES");
+    document.getElementById("reportStatus").className = "badge badge-ok";
+    log("Informe generado para " + periodKey() + " (" + state.records.length + " puntos)");
+  }
+
+  function formatDateES(iso) {
+    if (!iso) return "—";
+    const p = iso.split("-");
+    if (p.length === 3) return p[2] + "/" + p[1] + "/" + p[0];
+    return iso;
+  }
+
+  document.getElementById("btnPrintReport").addEventListener("click", () => {
+    if (!document.getElementById("reportPreview").querySelector("h1")) {
+      generateReport();
+    }
+    window.print();
+  });
+
+  document.getElementById("btnExportCSV").addEventListener("click", () => {
+    if (!state.records.length) { alert("No hay registros"); return; }
+    let csv = "punto;nivelRiesgo;aerobios;hongosNP;hongosPat;fechaRecogida;estado;documentoOrigen;observaciones\n";
+    state.records.forEach(r => {
+      csv += [r.punto, r.nivelRiesgo, r.aerobios, r.hongosNP, r.hongosPat, r.fechaRecogida, r.estado, r.documentoOrigen, r.observaciones]
+        .map(v => "\"" + String(v == null ? "" : v).replace(/"/g, "\"\"") + "\"").join(";") + "\n";
+    });
+    downloadBlob(csv, "BSA_" + periodKey() + ".csv", "text/csv;charset=utf-8");
+    log("Exportado CSV");
+  });
+
+  document.getElementById("btnExportJSON").addEventListener("click", () => {
+    const payload = {
+      version: 1,
+      year: state.year,
+      month: state.month,
+      hospital: state.config.hospital,
+      records: state.records,
+      config: state.config,
+      exported: new Date().toISOString()
+    };
+    downloadBlob(JSON.stringify(payload, null, 2), "BSA_" + periodKey() + ".json", "application/json");
+    log("Exportado JSON");
+  });
+
+  function downloadBlob(content, filename, mime) {
+    const blob = new Blob([content], { type: mime });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  // ========== PROJECT ==========
+  document.getElementById("btnSaveProject").addEventListener("click", () => {
+    const payload = {
+      version: 1,
+      year: state.year,
+      month: state.month,
+      records: state.records,
+      documents: state.documents,
+      points: state.points,
+      config: state.config,
+      saved: new Date().toISOString()
+    };
+    try {
+      localStorage.setItem("bsa_manager_project", JSON.stringify(payload));
+      log("Proyecto guardado en localStorage");
+      alert("Proyecto guardado localmente.");
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+  });
+
+  document.getElementById("btnDownloadProject").addEventListener("click", () => {
+    const payload = {
+      version: 1,
+      year: state.year,
+      month: state.month,
+      records: state.records,
+      documents: state.documents,
+      points: state.points,
+      config: state.config,
+      saved: new Date().toISOString()
+    };
+    downloadBlob(JSON.stringify(payload, null, 2), "BSA_proyecto_" + periodKey() + ".json", "application/json");
+    log("Proyecto descargado como archivo");
+  });
+
+  document.getElementById("btnLoadProjectFile").addEventListener("click", () => {
+    document.getElementById("projectFileInput").click();
+  });
+  document.getElementById("projectFileInput").addEventListener("change", () => {
+    const f = document.getElementById("projectFileInput").files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        restoreProject(data);
+        log("Proyecto cargado desde archivo: " + f.name);
+        alert("Proyecto restaurado.");
+      } catch (e) {
+        alert("Error: " + e.message);
+      }
+    };
+    reader.readAsText(f);
+    document.getElementById("projectFileInput").value = "";
+  });
+
+  document.getElementById("btnResetProject").addEventListener("click", () => {
+    if (!confirm("¿Borrar todos los datos y reiniciar la aplicación?")) return;
+    state.records = [];
+    state.documents = [];
+    state.points = JSON.parse(JSON.stringify(DEFAULT_POINTS));
+    state.config = {
+      thrR4: 10, thrR3: 150, thrR2: 200, thrR1: 200,
+      thrHongosR4: 0, thrHongosR3: 0, thrHongosR2: 10, thrHongosR1: 25,
+      thrHongosPat: 0,
+      hospital: "Hospital de Jarrio",
+      responsable: "",
+      tipoMuestra: "Aire de ambiente interior"
+    };
+    localStorage.removeItem("bsa_manager_project");
+    log("Proyecto reiniciado");
+    updateDashboard();
+    renderPointsTable();
+    document.getElementById("reportPreview").innerHTML = "<p style='text-align:center;color:var(--muted);'>Pulse «Generar / Actualizar informe».</p>";
+  });
+
+  function restoreProject(data) {
+    if (data.year) state.year = data.year;
+    if (data.month) state.month = data.month;
+    if (data.records) state.records = data.records;
+    if (data.documents) state.documents = data.documents;
+    if (data.points) state.points = data.points;
+    if (data.config) Object.assign(state.config, data.config);
+    document.getElementById("selYear").value = state.year;
+    document.getElementById("selMonth").value = state.month;
+    document.getElementById("thrR4").value = state.config.thrR4;
+    document.getElementById("thrR3").value = state.config.thrR3;
+    document.getElementById("thrR2").value = state.config.thrR2;
+    document.getElementById("thrR1").value = state.config.thrR1;
+    if (document.getElementById("thrHongosR4")) {
+      document.getElementById("thrHongosR4").value = state.config.thrHongosR4 ?? 0;
+      document.getElementById("thrHongosR3").value = state.config.thrHongosR3 ?? 0;
+      document.getElementById("thrHongosR2").value = state.config.thrHongosR2 ?? 10;
+      document.getElementById("thrHongosR1").value = state.config.thrHongosR1 ?? 25;
+    }
+    document.getElementById("thrHongosPat").value = state.config.thrHongosPat;
+    document.getElementById("cfgHospital").value = state.config.hospital;
+    if (document.getElementById("cfgResponsable")) document.getElementById("cfgResponsable").value = state.config.responsable || "";
+    updateHeaderMeta();
+    document.getElementById("cfgTipoMuestra").value = state.config.tipoMuestra;
+    updateDashboard();
+    updatePeriodInfo();
+    renderPointsTable();
+  }
+
+  // Auto-load from localStorage
+  function tryLoadLocal() {
+    try {
+      const raw = localStorage.getItem("bsa_manager_project");
+      if (raw) {
+        const data = JSON.parse(raw);
+        restoreProject(data);
+        log("Proyecto restaurado desde localStorage");
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+
+  // ========== INFORME HISTÓRICO ==========
+  async function generateHistoricalReport() {
+    const from = document.getElementById("histRepFrom").value;
+    const to = document.getElementById("histRepTo").value;
+    const preview = document.getElementById("histReportPreview");
+    const all = await idbGetAll();
+    const periods = all.filter(p => p.id >= from && p.id <= to).sort((a, b) => a.id.localeCompare(b.id));
+    const hospital = state.config.hospital || "";
+    const responsable = state.config.responsable || "";
+    const fechaInforme = new Date().toLocaleDateString("es-ES");
+
+    if (!periods.length) {
+      preview.innerHTML = "<p style='text-align:center;color:var(--danger);'>No hay periodos en el histórico para el rango seleccionado. Guarde periodos desde la pestaña Histórico.</p>";
+      return;
+    }
+
+    let html = "";
+    html += "<h1 style='color:var(--primary);text-align:center;font-size:1.3rem;'>INFORME HISTÓRICO DE BIOSEGURIDAD AMBIENTAL</h1>";
+    html += "<p style='text-align:center;color:var(--muted);'>Generado " + fechaInforme + "</p>";
+    html += "<p style='text-align:center;font-weight:600;'>" + esc(hospital) + "</p>";
+    if (responsable) html += "<p style='text-align:center;font-size:0.9rem;'>Responsable: " + esc(responsable) + "</p>";
+    html += "<p style='text-align:center;margin-bottom:1rem;'>Periodo analizado: <strong>" + esc(from) + "</strong> a <strong>" + esc(to) + "</strong> (" + periods.length + " muestreos)</p>";
+
+    // Resumen global
+    let totalPts = 0, totalOk = 0, totalInc = 0;
+    periods.forEach(p => {
+      (p.records || []).forEach(r => {
+        totalPts++;
+        if (r.estado === "validado") totalOk++;
+        else if (r.estado === "incidencia") totalInc++;
+      });
+    });
+    html += "<div style='background:#f0f7f0;padding:0.8rem 1rem;border-left:4px solid var(--success);margin:1rem 0;'>";
+    html += "<p><strong>Resumen global:</strong> " + totalPts + " determinaciones · " +
+      totalOk + " conformes · " + totalInc + " incidencias · Cumplimiento: <strong>" +
+      (totalPts ? Math.round(100 * totalOk / totalPts) : 0) + "%</strong></p></div>";
+
+    // Tabla por periodo
+    html += "<h2 style='color:var(--primary);font-size:1.05rem;margin-top:1.2rem;border-bottom:1px solid #ccc;'>Resultados por periodo</h2>";
+    periods.forEach(p => {
+      const recs = p.records || [];
+      const ok = recs.filter(r => r.estado === "validado").length;
+      const inc = recs.filter(r => r.estado === "incidencia").length;
+      html += "<h3 style='font-size:0.95rem;margin:0.8rem 0 0.4rem;'>" + esc(p.id) +
+        " <span style='font-weight:400;color:#666;'>(" + ok + " OK / " + inc + " incidencias)</span></h3>";
+      html += "<table style='width:100%;border-collapse:collapse;font-size:0.85rem;margin-bottom:0.6rem;'>";
+      html += "<thead><tr style='background:#e8eef2;'><th style='border:1px solid #333;padding:0.3rem;'>Punto</th><th style='border:1px solid #333;padding:0.3rem;'>Riesgo</th>" +
+        "<th style='border:1px solid #333;padding:0.3rem;'>Aerobios</th><th style='border:1px solid #333;padding:0.3rem;'>Hongos N.P.</th>" +
+        "<th style='border:1px solid #333;padding:0.3rem;'>Hongos Pat.</th><th style='border:1px solid #333;padding:0.3rem;'>Estado</th></tr></thead><tbody>";
+      recs.forEach(r => {
+        html += "<tr><td style='border:1px solid #333;padding:0.3rem;'>" + esc(r.punto) + "</td>" +
+          "<td style='border:1px solid #333;padding:0.3rem;'>" + esc(r.nivelRiesgo) + "</td>" +
+          "<td style='border:1px solid #333;padding:0.3rem;'><strong>" + esc(fmtVal(r.aerobios)) + "</strong></td>" +
+          "<td style='border:1px solid #333;padding:0.3rem;'>" + esc(fmtVal(r.hongosNP)) + "</td>" +
+          "<td style='border:1px solid #333;padding:0.3rem;'>" + esc(fmtVal(r.hongosPat)) + "</td>" +
+          "<td style='border:1px solid #333;padding:0.3rem;'>" + esc(r.estado) + "</td></tr>";
+      });
+      html += "</tbody></table>";
+    });
+
+    // Evolución (datos numéricos para el informe escrito)
+    html += "<h2 style='color:var(--primary);font-size:1.05rem;margin-top:1.2rem;border-bottom:1px solid #ccc;'>Análisis evolutivo</h2>";
+    html += "<table style='width:100%;border-collapse:collapse;font-size:0.85rem;'>";
+    html += "<thead><tr style='background:#e8eef2;'><th style='border:1px solid #333;padding:0.3rem;'>Periodo</th>" +
+      "<th style='border:1px solid #333;padding:0.3rem;'>Nº puntos</th><th style='border:1px solid #333;padding:0.3rem;'>Conformes</th>" +
+      "<th style='border:1px solid #333;padding:0.3rem;'>Incidencias</th><th style='border:1px solid #333;padding:0.3rem;'>% Cumplimiento</th>" +
+      "<th style='border:1px solid #333;padding:0.3rem;'>Media aerobios</th></tr></thead><tbody>";
+    periods.forEach(p => {
+      const recs = p.records || [];
+      const ok = recs.filter(r => r.estado === "validado").length;
+      const inc = recs.filter(r => r.estado === "incidencia").length;
+      const nums = recs.map(r => r.aerobios).filter(v => typeof v === "number");
+      const avg = nums.length ? (Math.round(nums.reduce((a,b)=>a+b,0) / nums.length * 10) / 10) : "—";
+      const pct = recs.length ? Math.round(100 * ok / recs.length) : 0;
+      html += "<tr><td style='border:1px solid #333;padding:0.3rem;'>" + esc(p.id) + "</td>" +
+        "<td style='border:1px solid #333;padding:0.3rem;'>" + recs.length + "</td>" +
+        "<td style='border:1px solid #333;padding:0.3rem;'>" + ok + "</td>" +
+        "<td style='border:1px solid #333;padding:0.3rem;'>" + inc + "</td>" +
+        "<td style='border:1px solid #333;padding:0.3rem;'><strong>" + pct + "%</strong></td>" +
+        "<td style='border:1px solid #333;padding:0.3rem;'>" + avg + "</td></tr>";
+    });
+    html += "</tbody></table>";
+    html += "<p style='font-size:0.8rem;color:#666;margin-top:1.5rem;border-top:1px solid #ccc;padding-top:0.5rem;'>";
+    html += "Generado por BSA Manager (Dr. José Manuel Fernández Carreira) · " + esc(hospital);
+    if (responsable) html += " · Resp. " + esc(responsable);
+    html += " · Datos del histórico local IndexedDB.</p>";
+
+    preview.innerHTML = html;
+    log("Informe histórico generado: " + from + " → " + to + " (" + periods.length + " periodos)");
+  }
+
+  document.getElementById("btnGenHistReport")?.addEventListener("click", () => generateHistoricalReport());
+  document.getElementById("btnPrintHistReport")?.addEventListener("click", () => {
+    const prev = document.getElementById("histReportPreview");
+    if (!prev || !prev.querySelector("h1")) {
+      generateHistoricalReport().then(() => setTimeout(() => window.print(), 300));
+    } else {
+      // Temporarily swap print target
+      const monthly = document.getElementById("reportPreview");
+      if (monthly) monthly.style.visibility = "hidden";
+      prev.classList.add("print-hist");
+      window.print();
+      if (monthly) monthly.style.visibility = "";
+      prev.classList.remove("print-hist");
+    }
+  });
+
+
+  // ========== INIT ==========
+  initYearSelect();
+  renderPointsTable();
+  updatePeriodInfo();
+  tryLoadLocal();
+  updateDashboard();
+  updateHeaderMeta();
+  initNewPointForm();
+  openIDB().then(() => {
+    refreshHistoryTable();
+    log("IndexedDB histórico listo");
+  }).catch(e => log("IndexedDB no disponible: " + e.message));
+  log("Aplicación lista. Hospital de Jarrio · Dr. José Manuel Fernández Carreira · Procesamiento local.");
+
+  // —— Histórico listeners ——
+  document.getElementById("btnSaveToHistory").addEventListener("click", async () => {
+    if (!state.records.length) { alert("No hay registros en el periodo actual."); return; }
+    const id = periodKey();
+    const obj = {
+      id,
+      year: state.year,
+      month: state.month,
+      records: JSON.parse(JSON.stringify(state.records)),
+      hospital: state.config.hospital,
+      savedAt: new Date().toISOString()
+    };
+    try {
+      await idbPutPeriod(obj);
+      log("Histórico: guardado " + id + " (" + state.records.length + " registros)");
+      refreshHistoryTable();
+      alert("Periodo " + id + " guardado en el histórico.");
+    } catch (e) {
+      alert("Error al guardar: " + e.message);
+    }
+  });
+
+  document.getElementById("btnLoadRetro").addEventListener("click", () => {
+    document.getElementById("retroFileInput").click();
+  });
+  document.getElementById("retroFileInput").addEventListener("change", async () => {
+    const files = document.getElementById("retroFileInput").files;
+    let n = 0;
+    for (const f of Array.from(files)) {
+      try {
+        const text = await f.text();
+        const data = JSON.parse(text);
+        // Accept: single period, array of periods, or export format with records+year+month
+        const items = Array.isArray(data) ? data : (data.periodos || data.history || [data]);
+        for (const item of items) {
+          let period;
+          if (item.id && item.records) {
+            period = item;
+          } else if (item.records && (item.year || item.month)) {
+            period = {
+              id: (item.year || state.year) + "-" + String(item.month || state.month).padStart(2, "0"),
+              year: item.year || state.year,
+              month: String(item.month || state.month).padStart(2, "0"),
+              records: item.records,
+              hospital: item.hospital || state.config.hospital,
+              savedAt: item.savedAt || new Date().toISOString()
+            };
+          } else continue;
+          // Re-evaluate records with current thresholds
+          period.records.forEach(evaluateRecord);
+          await idbPutPeriod(period);
+          n++;
+        }
+      } catch (e) {
+        log("Error retrospectivo " + f.name + ": " + e.message);
+      }
+    }
+    document.getElementById("retroFileInput").value = "";
+    refreshHistoryTable();
+    alert(n + " periodo(s) retrospectivo(s) cargado(s) en el histórico.");
+    log("Retrospectivos importados: " + n);
+  });
+
+  document.getElementById("btnExportHistory").addEventListener("click", async () => {
+    const all = await idbGetAll();
+    downloadBlob(JSON.stringify({ version: 1, exported: new Date().toISOString(), periodos: all }, null, 2),
+      "BSA_historico_completo.json", "application/json");
+    log("Histórico exportado (" + all.length + " periodos)");
+  });
+
+  document.getElementById("btnClearHistory").addEventListener("click", async () => {
+    if (!confirm("¿Vaciar TODO el histórico de muestreos? Esta acción no se puede deshacer.")) return;
+    await idbClear();
+    refreshHistoryTable();
+    log("Histórico vaciado");
+  });
+
+  document.getElementById("btnUpdateCharts").addEventListener("click", () => updateCharts());
+
+  // —— Nuevo punto de muestreo ——
+  function initNewPointForm() {
+    const areaSel = document.getElementById("newPointArea");
+    if (!areaSel) return;
+    const areas = [...new Set(INSTALLATION_TYPES.map(t => t.area))];
+    areaSel.innerHTML = '<option value="">— Seleccione área —</option>' +
+      areas.map(a => '<option value="' + escAttr(a) + '">' + esc(a) + '</option>').join("");
+    areaSel.addEventListener("change", () => {
+      const area = areaSel.value;
+      const tipoSel = document.getElementById("newPointTipo");
+      const tipos = INSTALLATION_TYPES.filter(t => t.area === area);
+      tipoSel.disabled = !area;
+      tipoSel.innerHTML = '<option value="">— Seleccione tipo —</option>' +
+        tipos.map((t, i) => '<option value="' + i + '" data-area="' + escAttr(area) + '">' + esc(t.tipo) + '</option>').join("");
+      // store full objects by rebuilding options with data
+      tipoSel.innerHTML = '<option value="">— Seleccione tipo —</option>';
+      tipos.forEach(t => {
+        const o = document.createElement("option");
+        o.value = t.tipo;
+        o.textContent = t.tipo;
+        o.dataset.riesgo = t.riesgo;
+        o.dataset.freq = t.frecuencia;
+        o.dataset.meses = t.mesesDefault;
+        tipoSel.appendChild(o);
+      });
+      document.getElementById("newPointRiesgo").value = "";
+    });
+    document.getElementById("newPointTipo").addEventListener("change", () => {
+      const opt = document.getElementById("newPointTipo").selectedOptions[0];
+      if (!opt || !opt.value) {
+        document.getElementById("newPointRiesgo").value = "";
+        return;
+      }
+      document.getElementById("newPointRiesgo").value = opt.dataset.riesgo || "";
+      document.getElementById("newPointFreq").value = opt.dataset.freq || "MENSUAL";
+      document.getElementById("newPointMeses").value = opt.dataset.meses || "1,2,3,4,5,6,7,8,9,10,11,12";
+    });
+  }
+
+  document.getElementById("btnAddPoint").addEventListener("click", () => {
+    const nombre = (document.getElementById("newPointNombre").value || "").trim();
+    const riesgo = document.getElementById("newPointRiesgo").value;
+    const freq = document.getElementById("newPointFreq").value;
+    const mesesStr = document.getElementById("newPointMeses").value;
+    const tipo = document.getElementById("newPointTipo").value;
+    if (!nombre) { alert("Indique el nombre del punto."); return; }
+    if (!riesgo) { alert("Seleccione área y tipo de instalación."); return; }
+    if (state.points.some(p => p.nombre.toLowerCase() === nombre.toLowerCase())) {
+      alert("Ya existe un punto con ese nombre.");
+      return;
+    }
+    const meses = mesesStr.split(",").map(x => parseInt(x.trim(), 10)).filter(n => n >= 1 && n <= 12);
+    const id = "P" + Date.now().toString(36).toUpperCase();
+    state.points.push({
+      id,
+      nombre,
+      riesgo,
+      frecuencia: freq,
+      meses: meses.length ? meses : [1,4,7,10],
+      nota: tipo || ""
+    });
+    renderPointsTable();
+    log("Nuevo punto añadido: " + nombre + " (" + riesgo + ")");
+    document.getElementById("newPointNombre").value = "";
+    document.getElementById("newPointRiesgo").value = "";
+    document.getElementById("newPointArea").value = "";
+    document.getElementById("newPointTipo").innerHTML = '<option value="">— Primero elija área —</option>';
+    document.getElementById("newPointTipo").disabled = true;
+    alert("Punto «" + nombre + "» añadido con riesgo " + riesgo + ".");
+  });
+
+
+})();
+  </script>
+</body>
+</html>
