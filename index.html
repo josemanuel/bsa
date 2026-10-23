@@ -421,15 +421,53 @@
     body.read-only #btnResetProtocol,
     body.read-only #btnAddPoint,
     body.read-only input:not([readonly]):not([type="checkbox"]):not([type="date"]),
-    body.read-only select:not(#filterText):not(#filterEstado):not(#filterTipo):not(#selYear):not(#selMonth) {
+    body.read-only select:not(#filterText):not(#filterEstado):not(#filterTipo):not(#selYear):not(#selMonth):not(#hdrYear):not(#hdrMonth) {
       pointer-events: none; opacity: 0.7;
     }
     body.read-only table.data input { pointer-events: none; background: #f4f7f9; }
+    .period-bar {
+      display: flex; align-items: center; gap: 0.35rem;
+      background: rgba(255,255,255,0.12); border-radius: 8px;
+      padding: 0.25rem 0.55rem; margin-left: auto; margin-right: 0.75rem;
+    }
+    .period-bar label {
+      font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em;
+      color: rgba(255,255,255,0.75); margin: 0;
+    }
+    .period-bar select {
+      min-height: 32px; height: 32px; font-size: 0.88rem; font-weight: 600;
+      border: 1px solid rgba(255,255,255,0.35); border-radius: 6px;
+      background: #fff; color: #0d4f6b; padding: 0 0.4rem; cursor: pointer;
+    }
+    .period-bar select:focus { outline: 2px solid #7ec8e3; }
+    @media (max-width: 900px) {
+      .period-bar { margin: 0.25rem 0; width: 100%; order: 3; }
+      header.app-header { flex-wrap: wrap; }
+    }
   </style>
 </head>
 <body>
   <header class="app-header no-print">
     <div class="logo">BSA Manager <span>| Bioseguridad Ambiental</span></div>
+    <div class="period-bar" title="Periodo de trabajo (mes del informe)">
+      <label for="hdrMonth">Mes</label>
+      <select id="hdrMonth" aria-label="Mes del informe">
+        <option value="01">Enero</option>
+        <option value="02">Febrero</option>
+        <option value="03">Marzo</option>
+        <option value="04">Abril</option>
+        <option value="05">Mayo</option>
+        <option value="06">Junio</option>
+        <option value="07">Julio</option>
+        <option value="08">Agosto</option>
+        <option value="09">Septiembre</option>
+        <option value="10">Octubre</option>
+        <option value="11">Noviembre</option>
+        <option value="12">Diciembre</option>
+      </select>
+      <label for="hdrYear">Año</label>
+      <select id="hdrYear" aria-label="Año del informe"></select>
+    </div>
     <div class="meta" id="headerMeta">Hospital de Jarrio · Responsable no definido</div>
     <button type="button" class="nav-burger no-print" id="navBurger" aria-label="Menú">☰</button>
   </header>
@@ -1219,8 +1257,11 @@
               copy.periodo = id;
               state.records.push(copy);
             });
-            document.getElementById("selYear").value = state.year;
-            document.getElementById("selMonth").value = state.month;
+            if (typeof syncPeriodSelectors === "function") syncPeriodSelectors();
+            else {
+              document.getElementById("selYear").value = state.year;
+              document.getElementById("selMonth").value = state.month;
+            }
             updateDashboard();
             updatePeriodInfo();
             log("Histórico: cargado periodo " + id);
@@ -1658,25 +1699,74 @@
   }
 
   // ========== PERIODO ==========
-  function initYearSelect() {
-    const sel = document.getElementById("selYear");
+  function fillYearOptions(sel) {
+    if (!sel) return;
     sel.innerHTML = "";
-    for (let y = 2024; y <= 2030; y++) {
-      const o = document.createElement("option");
+    for (var y = 2020; y <= 2035; y++) {
+      var o = document.createElement("option");
       o.value = y;
       o.textContent = y;
       if (y === state.year) o.selected = true;
       sel.appendChild(o);
     }
-    document.getElementById("selMonth").value = state.month;
   }
 
-  document.getElementById("btnApplyPeriod").addEventListener("click", () => {
-    state.year = parseInt(document.getElementById("selYear").value, 10);
-    state.month = document.getElementById("selMonth").value;
-    log("Periodo aplicado: " + periodKey() + " (" + monthName(state.month) + " " + state.year + ")");
+  function syncPeriodSelectors() {
+    var m = String(state.month).padStart(2, "0");
+    var y = String(state.year);
+    ["selMonth", "hdrMonth"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.value = m;
+    });
+    ["selYear", "hdrYear"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) {
+        if (!el.options.length) fillYearOptions(el);
+        el.value = y;
+      }
+    });
+  }
+
+  function initYearSelect() {
+    fillYearOptions(document.getElementById("selYear"));
+    fillYearOptions(document.getElementById("hdrYear"));
+    syncPeriodSelectors();
+  }
+
+  function applyPeriod(fromYear, fromMonth, silent) {
+    if (fromYear != null) state.year = parseInt(fromYear, 10);
+    if (fromMonth != null) state.month = String(fromMonth).padStart(2, "0");
+    syncPeriodSelectors();
+    if (!silent) log("Periodo: " + periodKey() + " (" + monthName(state.month) + " " + state.year + ")");
     updateDashboard();
     updatePeriodInfo();
+  }
+
+  document.getElementById("btnApplyPeriod").addEventListener("click", function () {
+    applyPeriod(document.getElementById("selYear").value, document.getElementById("selMonth").value);
+  });
+
+  // Selector de mes/año en cabecera: aplica al cambiar
+  ["hdrMonth", "hdrYear", "selMonth", "selYear"].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("change", function () {
+      var y = (document.getElementById("hdrYear") || document.getElementById("selYear")).value;
+      var m = (document.getElementById("hdrMonth") || document.getElementById("selMonth")).value;
+      // Preferir el control que disparó el evento
+      if (this.id === "hdrYear" || this.id === "selYear") y = this.value;
+      if (this.id === "hdrMonth" || this.id === "selMonth") m = this.value;
+      // Si el cambio viene del panel, leer también el otro del panel
+      if (this.id === "selYear" || this.id === "selMonth") {
+        y = document.getElementById("selYear").value;
+        m = document.getElementById("selMonth").value;
+      }
+      if (this.id === "hdrYear" || this.id === "hdrMonth") {
+        y = document.getElementById("hdrYear").value;
+        m = document.getElementById("hdrMonth").value;
+      }
+      applyPeriod(y, m);
+    });
   });
 
   function updatePeriodInfo() {
@@ -1882,12 +1972,16 @@
           state.documents.push({ name: name, date: new Date().toISOString() });
           log("Importado: " + name);
         }
-        // Resumen de registros añadidos por este archivo
-        const added = state.records.slice(beforeOne);
-        if (added.length === 0) {
+        // Resumen: buscar registros de este archivo (añadidos o actualizados por upsert)
+        var fromFile = state.records.filter(function (r) {
+          return r.documentoOrigen === name;
+        });
+        // Si el archivo no dejó rastro por nombre, usar los nuevos del slice
+        if (!fromFile.length) fromFile = state.records.slice(beforeOne);
+        if (fromFile.length === 0) {
           results.push({ name: name, status: "error", error: "Sin registros reconocidos" });
         } else {
-          added.forEach(function (rec) {
+          fromFile.forEach(function (rec) {
             results.push({
               name: name,
               status: rec.estado === "incidencia" ? "incidencia" : "ok",
@@ -1897,7 +1991,8 @@
               hongosPat: rec.hongosPat,
               estado: rec.estado,
               issues: rec._issues || [],
-              requiereRemuestreo: !!rec.requiereRemuestreo
+              requiereRemuestreo: !!rec.requiereRemuestreo,
+              periodo: rec.periodo
             });
           });
         }
@@ -1907,30 +2002,56 @@
       }
     }
     fileInput.value = "";
-    // Si los datos importados corresponden a otro mes, cambiar el periodo activo
-    var newRecs = state.records.slice(before);
-    if (newRecs.length) {
-      var counts = {};
-      newRecs.forEach(function (r) {
-        ensureRecordPeriodo(r);
-        counts[r.periodo] = (counts[r.periodo] || 0) + 1;
+    // Registros añadidos/actualizados en esta importación
+    var newRecs = state.records.slice(Math.max(0, before));
+    // Reconstruir lista de los que acaban de importarse por documentoOrigen reciente
+    if (!newRecs.length && results.length) {
+      newRecs = state.records.filter(function (r) {
+        return results.some(function (res) { return res.name && r.documentoOrigen === res.name; });
       });
+    }
+    if (newRecs.length || results.some(function (r) { return r.status === "ok" || r.status === "incidencia"; })) {
+      // Preferir periodos de los resultados OK
+      var counts = {};
+      state.records.forEach(function (r) {
+        if (results.some(function (res) { return res.punto === r.punto && res.name === r.documentoOrigen; })) {
+          ensureRecordPeriodo(r);
+          counts[r.periodo] = (counts[r.periodo] || 0) + 1;
+        }
+      });
+      if (!Object.keys(counts).length) {
+        newRecs.forEach(function (r) {
+          ensureRecordPeriodo(r);
+          counts[r.periodo] = (counts[r.periodo] || 0) + 1;
+        });
+      }
       var best = null, bestN = 0;
       Object.keys(counts).forEach(function (k) {
         if (counts[k] > bestN) { bestN = counts[k]; best = k; }
       });
-      if (best && best !== periodKey()) {
+      if (best) {
         var parts = best.split("-");
         state.year = parseInt(parts[0], 10);
         state.month = parts[1];
-        document.getElementById("selYear").value = state.year;
-        document.getElementById("selMonth").value = state.month;
-        log("Periodo ajustado automáticamente a " + best + " según fecha de recogida de los PDF");
+        if (typeof applyPeriod === "function") applyPeriod(state.year, state.month, true);
+        else if (typeof syncPeriodSelectors === "function") syncPeriodSelectors();
+        log("Periodo activo: " + best + " (según fecha de recogida / nombre de archivo)");
       }
-      // Informar si hay varios periodos en la misma importación
       var nPeriods = Object.keys(counts).length;
       if (nPeriods > 1) {
-        log("Importación con " + nPeriods + " periodos distintos: " + Object.keys(counts).join(", "));
+        log("Importación con " + nPeriods + " periodos: " + Object.keys(counts).join(", "));
+      }
+      // Guardar automáticamente en histórico cada periodo importado
+      try {
+        await autoSaveHistoryForRecords(
+          state.records.filter(function (r) {
+            return results.some(function (res) {
+              return res.punto === r.punto || (res.name && r.documentoOrigen === res.name);
+            });
+          })
+        );
+      } catch (eHist) {
+        log("No se pudo auto-guardar histórico: " + eHist.message);
       }
     }
     showImportSummary(results);
@@ -1990,76 +2111,185 @@
     card.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
-  /** Intenta extraer un registro del formato de informe individual de laboratorio (texto copiado del PDF) */
+  /** Normaliza nombre de punto de muestreo a la denominación canónica */
+  function normalizePuntoName(raw) {
+    if (!raw) return "";
+    var s = String(raw).replace(/\s+/g, " ").trim();
+    // Quitar basura posterior (Fecha final, etc.)
+    s = s.split(/\s{2,}|\t|Fecha\s|RESULTADO|PAR[AÁ]METRO/i)[0].trim();
+    if (/quir[oó]fano\s*1\b/i.test(s)) return "Quirófano 1";
+    if (/quir[oó]fano\s*2\b/i.test(s)) return "Quirófano 2";
+    if (/quir[oó]fano\s*3\b/i.test(s)) return "Quirófano 3";
+    if (/quir[oó]fano\s*4\b/i.test(s)) return "Quirófano 4";
+    if (/rea\s*(box\s*)?control/i.test(s)) return "REA Box Control";
+    if (/rea\s*box\s*1\b/i.test(s) || /rea\s*1\b/i.test(s)) return "REA Box 1";
+    if (/rea\s*box\s*2\b/i.test(s) || /rea\s*2\b/i.test(s)) return "REA Box 2";
+    if (/endoscop/i.test(s)) return "Endoscopias";
+    if (/esteriliz.*est[eé]ril|proceso\s*y\s*empaquet/i.test(s)) return "Esterilización Área Estéril (Proceso y empaquetado)";
+    if (/esteriliz.*limp|almacenaje|almac[eé]n/i.test(s)) return "Esterilización Sala Limpio (Zona de almacenaje)";
+    return s;
+  }
+
+  /** Extrae el punto prioritariamente del nombre de archivo (muy fiable en informes Eurolab) */
+  function puntoFromFilename(origen) {
+    if (!origen) return "";
+    var name = String(origen);
+    // Patrones típicos: "... Quirófano 1 - Hospital ..." / "... REA Box 1 - ..." / "... REA Control - ..."
+    var m = name.match(/quir[oó]fano\s*(\d+)/i);
+    if (m) return "Quirófano " + m[1];
+    if (/rea\s*(box\s*)?control/i.test(name)) return "REA Box Control";
+    m = name.match(/rea\s*box\s*(\d+)/i);
+    if (m) return "REA Box " + m[1];
+    if (/endoscop/i.test(name)) return "Endoscopias";
+    if (/esteriliz/i.test(name) && /est[eé]ril|proceso/i.test(name)) return "Esterilización Área Estéril (Proceso y empaquetado)";
+    if (/esteriliz/i.test(name) && /limp|almacen/i.test(name)) return "Esterilización Sala Limpio (Zona de almacenaje)";
+    return "";
+  }
+
+  /** Inserta o sustituye registro del mismo punto + periodo (evita duplicados) */
+  function upsertRecord(rec) {
+    ensureRecordPeriodo(rec);
+    evaluateRecord(rec);
+    var idx = -1;
+    for (var i = 0; i < state.records.length; i++) {
+      ensureRecordPeriodo(state.records[i]);
+      if (state.records[i].punto === rec.punto &&
+          state.records[i].periodo === rec.periodo &&
+          (state.records[i].tipoMuestreo || "programado") === (rec.tipoMuestreo || "programado")) {
+        idx = i;
+        break;
+      }
+    }
+    if (idx >= 0) {
+      state.records[idx] = rec;
+      return "updated";
+    }
+    state.records.push(rec);
+    return "added";
+  }
+
+  /** Guarda en IndexedDB todos los periodos tocados por los registros indicados */
+  async function autoSaveHistoryForRecords(recs) {
+    if (!recs || !recs.length) return;
+    var byPeriod = {};
+    // Incluir TODOS los registros actuales de cada periodo afectado (no solo los nuevos)
+    state.records.forEach(function (r) {
+      ensureRecordPeriodo(r);
+    });
+    recs.forEach(function (r) {
+      ensureRecordPeriodo(r);
+      byPeriod[r.periodo] = true;
+    });
+    var saved = [];
+    for (var pk of Object.keys(byPeriod)) {
+      var parts = pk.split("-");
+      var year = parseInt(parts[0], 10);
+      var month = parts[1];
+      var periodRecs = state.records.filter(function (r) {
+        return (r.periodo || "") === pk;
+      });
+      if (!periodRecs.length) continue;
+      try {
+        await idbPutPeriod({
+          id: pk,
+          year: year,
+          month: month,
+          records: JSON.parse(JSON.stringify(periodRecs)),
+          hospital: state.config.hospital,
+          savedAt: new Date().toISOString()
+        });
+        saved.push(pk + " (" + periodRecs.length + ")");
+      } catch (e) {
+        log("Error guardando histórico " + pk + ": " + e.message);
+      }
+    }
+    if (saved.length) {
+      log("Histórico actualizado automáticamente: " + saved.join(", "));
+      if (typeof refreshHistoryTable === "function") refreshHistoryTable();
+    }
+  }
+
+  /** Intenta extraer un registro del formato de informe individual de laboratorio (PDF) */
   function tryParseLabReport(text, origen) {
-    const t = text.replace(/\r/g, "");
+    const t = String(text || "").replace(/\r/g, " ").replace(/\u00a0/g, " ");
     // Detectar si parece un informe de laboratorio de aire
-    if (!/INFORME\s*(N[º°]|No|Nº|#)?\s*:?\s*\d/i.test(t) && !/Aerobios\s*mes[oó]filos/i.test(t)) {
+    if (!/INFORME/i.test(t) && !/Aerobios\s*mes/i.test(t) && !/Denominaci/i.test(t)) {
       return null;
     }
-    let punto = "";
-    let m = t.match(/Denominaci[oó]n\s*[:\t]\s*(.+)/i);
-    if (m) punto = m[1].trim().split(/\n/)[0].trim();
+
+    // 1) Punto: primero nombre de archivo (fiable), luego Denominación, luego patrones en texto
+    let punto = puntoFromFilename(origen);
     if (!punto) {
-      m = t.match(/(?:Quir[oó]fano\s*[123]|REA\s*(?:Box\s*)?[12]|REA\s*Control|Endoscopias|Esterilizaci[oó]n[^\n]*)/i);
-      if (m) punto = m[0].trim();
+      var mDen = t.match(/Denominaci[oó]n\s*[:\s]+([^\n\r]+)/i);
+      if (mDen) punto = normalizePuntoName(mDen[1]);
     }
-    // Normalizar nombres
-    if (/REA\s*Control/i.test(punto) && !/Box/i.test(punto)) punto = "REA Box Control";
-    if (/REA\s*Box\s*1/i.test(punto)) punto = "REA Box 1";
-    if (/REA\s*Box\s*2/i.test(punto)) punto = "REA Box 2";
+    if (!punto) {
+      var mP = t.match(/quir[oó]fano\s*[1-4]|rea\s*box\s*[12]|rea\s*control|endoscopias|esterilizaci[oó]n/i);
+      if (mP) punto = normalizePuntoName(mP[0]);
+    }
+    punto = normalizePuntoName(punto);
 
-    let aerobios = null, hongosNP = "No detectado", hongosPat = "No detectado", identNP = "";
-    // Aerobios
-    m = t.match(/Aerobios\s*mes[oó]filos\s*(?:totales)?\s*[|\t:\s]+(\d+(?:[.,]\d+)?|No\s*detectado)/i);
-    if (m) aerobios = parseNumeric(m[1]);
-    // Hongos NP – puede ir con identificación en la misma línea o siguiente
-    m = t.match(/Hongos\s*No\s*Pat[oó]genos\s*(?:\(N\.?P\.?\))?\s*[|\t:\s]+(\d+|No\s*detectado)(?:\s*[|\t]\s*([A-Za-z]+))?/i);
-    if (m) {
-      hongosNP = parseNumeric(m[1]);
-      if (m[2] && m[2].toLowerCase() !== "pnt") identNP = m[2];
-    }
-    // Si hay "Penicillium" en el texto cerca de hongos
-    if (/Penicillium/i.test(t) && (hongosNP === 0 || hongosNP === "No detectado" || hongosNP === null)) {
-      const pm = t.match(/(\d+)\s*[|\t].*?Penicillium|Penicillium.*?(\d+)/i);
-      if (pm) hongosNP = parseInt(pm[1] || pm[2], 10);
-      else hongosNP = 1;
+    // 2) Aerobios – varios patrones (layout tabular PDF.js)
+    let aerobios = null;
+    var mA =
+      t.match(/Aerobios\s*mes[oó]filos\s*(?:totales)?\s*(?:UFC\/m3)?\s*[:\|\s]*(\d+(?:[.,]\d+)?)/i) ||
+      t.match(/Aerobios\s*mes[oó]filos[^\d]{0,40}?(\d{1,4})(?:\s|-|PNT)/i) ||
+      t.match(/mes[oó]filos\s*totales\s+(\d+)/i);
+    if (mA) aerobios = parseNumeric(mA[1]);
+
+    // 3) Hongos N.P.
+    let hongosNP = "No detectado", identNP = "";
+    var mNP = t.match(/Hongos\s*No\s*Pat[oó]genos\s*(?:\(N\.?P\.?\))?[^\dN]{0,30}(No\s*detectado|\d+)/i);
+    if (mNP) hongosNP = parseNumeric(mNP[1]);
+    if (/Penicillium/i.test(t)) {
       identNP = "Penicillium";
+      if (hongosNP === "No detectado" || hongosNP === 0 || hongosNP === null) {
+        var pm = t.match(/Hongos\s*No\s*Pat[oó]genos[^\d]{0,40}?(\d+)/i);
+        hongosNP = pm ? parseInt(pm[1], 10) : 1;
+      }
     }
-    // Hongos patógenos
-    m = t.match(/Hongos\s*Pat[oó]genos\s*[|\t:\s]+(\d+|No\s*detectado)/i);
-    if (m) hongosPat = parseNumeric(m[1]);
+    // 4) Hongos patógenos
+    let hongosPat = "No detectado";
+    var mPat = t.match(/Hongos\s*Pat[oó]genos[^\dN]{0,30}(No\s*detectado|\d+|[A-Za-z][A-Za-z\s\.]+?)(?:\s{2}|PNT|-|$)/i);
+    if (mPat) {
+      var pv = mPat[1].trim();
+      if (/^no\s*detectado$/i.test(pv)) hongosPat = "No detectado";
+      else if (/^\d+$/.test(pv)) hongosPat = parseInt(pv, 10);
+      else if (pv.length > 1 && !/^pnt/i.test(pv)) hongosPat = pv;
+    }
 
+    // 5) Fecha de recogida
     let fecha = "";
-    // Formatos: 25/08/2026 · 25-08-2026 · 2026-08-25 · texto con espacios (PDF.js)
-    m = t.match(/Fecha\s*de\s*recogida\s*[:\s]*(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{2,4})/i);
-    if (m) {
-      var yy = m[3].length === 2 ? "20" + m[3] : m[3];
-      fecha = yy + "-" + String(m[2]).padStart(2, "0") + "-" + String(m[1]).padStart(2, "0");
+    var mF = t.match(/Fecha\s*de\s*recogida\s*[:\s]*(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{2,4})/i);
+    if (mF) {
+      var yy = mF[3].length === 2 ? "20" + mF[3] : mF[3];
+      fecha = yy + "-" + String(mF[2]).padStart(2, "0") + "-" + String(mF[1]).padStart(2, "0");
     }
     if (!fecha) {
-      m = t.match(/Fecha\s*de\s*recogida\s*[:\s]*(\d{4})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{1,2})/i);
-      if (m) fecha = m[1] + "-" + String(m[2]).padStart(2, "0") + "-" + String(m[3]).padStart(2, "0");
+      mF = t.match(/(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(20\d{2})/);
+      // Preferir fecha cercana a "recogida" si hay varias
+      if (mF && /recogida/i.test(t)) {
+        fecha = mF[3] + "-" + String(mF[2]).padStart(2, "0") + "-" + String(mF[1]).padStart(2, "0");
+      }
     }
-    // Fallback: mes en el nombre de archivo (… Agosto 2026 …)
+    // Fallback: mes en nombre de archivo
     if (!fecha && origen) {
       var mesNombres = { enero: "01", febrero: "02", marzo: "03", abril: "04", mayo: "05", junio: "06",
         julio: "07", agosto: "08", septiembre: "09", octubre: "10", noviembre: "11", diciembre: "12" };
       var fm = String(origen).match(/(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\s*(20\d{2})/i);
-      if (fm) {
-        var mm = mesNombres[fm[1].toLowerCase()] || "01";
-        fecha = fm[2] + "-" + mm + "-15";
-      }
+      if (fm) fecha = fm[2] + "-" + (mesNombres[fm[1].toLowerCase()] || "01") + "-15";
     }
+
     let informeNro = "";
-    m = t.match(/INFORME\s*(?:N[º°]|No|Nº|#)?\s*:?\s*(\d+\w*)/i);
-    if (m) informeNro = m[1];
+    var mInf = t.match(/INFORME\s*(?:N[º°o]|No|#)?\s*:?\s*(\d+\w*)/i);
+    if (mInf) informeNro = mInf[1];
 
     if (!punto && aerobios === null) return null;
+    if (!punto) punto = "Desconocido";
 
     const def = findPointDef(punto);
     const rec = {
-      punto: punto || "Desconocido",
+      punto: punto,
       nivelRiesgo: def ? def.riesgo : "",
       aerobios: aerobios,
       hongosNP: hongosNP,
@@ -2071,9 +2301,7 @@
       estado: "pendiente",
       tipoMuestreo: "programado"
     };
-    ensureRecordPeriodo(rec);
-    evaluateRecord(rec);
-    state.records.push(rec);
+    upsertRecord(rec);
     return 1;
   }
 
