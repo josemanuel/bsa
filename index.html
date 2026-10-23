@@ -555,7 +555,7 @@
         <ul class="file-list" id="fileList"></ul>
 
         <div class="btn-group">
-          <button class="btn btn-primary" id="btnLoadDemo">Cargar demo Agosto 2026</button>
+          <button class="btn btn-primary" id="btnLoadDemo">Cargar datos de demostración</button>
           <button class="btn btn-secondary" id="btnAddManual">Añadir registro manual</button>
           <button class="btn btn-secondary" id="btnPasteCSV">Pegar CSV / texto</button>
         </div>
@@ -1206,16 +1206,25 @@
             const all = await idbGetAll();
             const p = all.find(x => x.id === id);
             if (!p) return;
-            if (state.records.length && !confirm("Se reemplazarán los datos actuales por el periodo " + id + ". ¿Continuar?")) return;
             state.year = p.year;
-            state.month = p.month;
-            state.records = JSON.parse(JSON.stringify(p.records || []));
+            state.month = String(p.month).padStart(2, "0");
+            // Conservar registros de otros periodos; sustituir solo este
+            state.records = state.records.filter(function (r) {
+              ensureRecordPeriodo(r);
+              return r.periodo !== id;
+            });
+            (p.records || []).forEach(function (r) {
+              var copy = JSON.parse(JSON.stringify(r));
+              ensureRecordPeriodo(copy);
+              copy.periodo = id;
+              state.records.push(copy);
+            });
             document.getElementById("selYear").value = state.year;
             document.getElementById("selMonth").value = state.month;
             updateDashboard();
             updatePeriodInfo();
             log("Histórico: cargado periodo " + id);
-            alert("Periodo " + id + " cargado en el espacio de trabajo.");
+            alert("Periodo " + id + " cargado. Los datos de otros meses se conservan.");
           }
         });
       });
@@ -1343,19 +1352,21 @@
   ];
 
   // Datos reales extraídos de los 6 informes individuales de laboratorio de agosto 2026
-  const DEMO_AGOSTO = [
-    { punto: "Quirófano 1", nivelRiesgo: "Alto. R4", aerobios: 2, hongosNP: "No detectado", hongosPat: "No detectado", fechaRecogida: "2026-08-25", documentoOrigen: "26362LC01", codigoMuestra: "26352SP01", informeNro: "26362LC01", observaciones: "", estado: "validado" },
-    { punto: "Quirófano 2", nivelRiesgo: "Medio. R3", aerobios: 4, hongosNP: "No detectado", hongosPat: "No detectado", fechaRecogida: "2026-08-25", documentoOrigen: "26362LC02", codigoMuestra: "26352SP02", informeNro: "26362LC02", observaciones: "", estado: "validado" },
-    { punto: "Quirófano 3", nivelRiesgo: "Medio. R3", aerobios: 4, hongosNP: "No detectado", hongosPat: "No detectado", fechaRecogida: "2026-08-25", documentoOrigen: "26362LC03", codigoMuestra: "26352SP03", informeNro: "26362LC03", observaciones: "", estado: "validado" },
-    { punto: "REA Box Control", nivelRiesgo: "Moderado. R2", aerobios: 50, hongosNP: 1, hongosPat: "No detectado", fechaRecogida: "2026-08-25", documentoOrigen: "26362LC04", codigoMuestra: "26352SP04", informeNro: "26362LC04", observaciones: "Identificación: Penicillium. <10 colonias → cumple criterio R2", estado: "validado" },
-    { punto: "REA Box 1", nivelRiesgo: "Moderado. R2", aerobios: 69, hongosNP: "No detectado", hongosPat: "No detectado", fechaRecogida: "2026-08-25", documentoOrigen: "26362LC05", codigoMuestra: "26352SP05", informeNro: "26362LC05", observaciones: "", estado: "validado" },
-    { punto: "REA Box 2", nivelRiesgo: "Moderado. R2", aerobios: 35, hongosNP: "No detectado", hongosPat: "No detectado", fechaRecogida: "2026-08-25", documentoOrigen: "26362LC06", codigoMuestra: "26352SP06", informeNro: "26362LC06", observaciones: "", estado: "validado" }
+  // Demo docente genérica (incluye 1 incidencia por hongo patógeno para practicar protocolo/remuestreo)
+  const DEMO_DATA = [
+    { punto: "Quirófano 1", nivelRiesgo: "Alto. R4", aerobios: 2, hongosNP: "No detectado", hongosPat: "No detectado", fechaRecogida: "2026-08-25", documentoOrigen: "Demo-Q1", observaciones: "", tipoMuestreo: "programado" },
+    { punto: "Quirófano 2", nivelRiesgo: "Medio. R3", aerobios: 4, hongosNP: "No detectado", hongosPat: "No detectado", fechaRecogida: "2026-08-25", documentoOrigen: "Demo-Q2", observaciones: "", tipoMuestreo: "programado" },
+    { punto: "Quirófano 3", nivelRiesgo: "Medio. R3", aerobios: 18, hongosNP: 2, hongosPat: "Aspergillus fumigatus", fechaRecogida: "2026-08-25", documentoOrigen: "Demo-Q3", observaciones: "INCIDENCIA DEMO: hongo patógeno detectado", tipoMuestreo: "programado" },
+    { punto: "REA Box Control", nivelRiesgo: "Moderado. R2", aerobios: 50, hongosNP: 1, hongosPat: "No detectado", fechaRecogida: "2026-08-25", documentoOrigen: "Demo-REA-C", observaciones: "Identificación: Penicillium (<10 → cumple R2)", tipoMuestreo: "programado" },
+    { punto: "REA Box 1", nivelRiesgo: "Moderado. R2", aerobios: 69, hongosNP: "No detectado", hongosPat: "No detectado", fechaRecogida: "2026-08-25", documentoOrigen: "Demo-REA-1", observaciones: "", tipoMuestreo: "programado" },
+    { punto: "REA Box 2", nivelRiesgo: "Moderado. R2", aerobios: 35, hongosNP: "No detectado", hongosPat: "No detectado", fechaRecogida: "2026-08-25", documentoOrigen: "Demo-REA-2", observaciones: "", tipoMuestreo: "programado" }
   ];
 
-  // Estado de la aplicación
+  // Estado de la aplicación (periodo inicial = mes actual del sistema; sin datos preloaded)
+  const _now = new Date();
   const state = {
-    year: 2026,
-    month: "08",
+    year: _now.getFullYear(),
+    month: String(_now.getMonth() + 1).padStart(2, "0"),
     records: [],
     documents: [],
     points: JSON.parse(JSON.stringify(DEFAULT_POINTS)),
@@ -1402,7 +1413,54 @@
   }
 
   function periodKey() {
-    return state.year + "-" + state.month;
+    return state.year + "-" + String(state.month).padStart(2, "0");
+  }
+
+  /** YYYY-MM a partir de fecha ISO o dd/mm/yyyy */
+  function periodoFromFecha(fecha, isRemuestreo, periodoIncidencia) {
+    if (isRemuestreo && periodoIncidencia) return periodoIncidencia;
+    if (!fecha) return periodKey();
+    var s = String(fecha).trim();
+    var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return m[1] + "-" + String(m[2]).padStart(2, "0");
+    m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+    if (m) {
+      var y = m[3].length === 2 ? "20" + m[3] : m[3];
+      return y + "-" + String(m[2]).padStart(2, "0");
+    }
+    return periodKey();
+  }
+
+  function normalizeFechaISO(fecha) {
+    if (!fecha) return "";
+    var s = String(fecha).trim();
+    var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return m[1] + "-" + String(m[2]).padStart(2, "0") + "-" + String(m[3]).padStart(2, "0");
+    m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+    if (m) {
+      var y = m[3].length === 2 ? "20" + m[3] : m[3];
+      return y + "-" + String(m[2]).padStart(2, "0") + "-" + String(m[1]).padStart(2, "0");
+    }
+    return s;
+  }
+
+  /** Registros del periodo seleccionado en el panel */
+  function recordsCurrent() {
+    var pk = periodKey();
+    return state.records.filter(function (r) {
+      var p = r.periodo || periodoFromFecha(r.fechaRecogida, r.tipoMuestreo === "remuestreo", r.periodoIncidencia);
+      return p === pk;
+    });
+  }
+
+  function ensureRecordPeriodo(rec) {
+    rec.fechaRecogida = normalizeFechaISO(rec.fechaRecogida) || rec.fechaRecogida;
+    if (rec.tipoMuestreo === "remuestreo" && rec.periodoIncidencia) {
+      rec.periodo = rec.periodoIncidencia;
+    } else {
+      rec.periodo = periodoFromFecha(rec.fechaRecogida);
+    }
+    return rec;
   }
 
   function monthName(m) {
@@ -1666,9 +1724,13 @@
   }
 
   function updateDashboard() {
+    // Asegurar periodo en registros antiguos
+    state.records.forEach(ensureRecordPeriodo);
+    var cur = recordsCurrent();
+
     document.getElementById("statPeriod").textContent = monthName(state.month).substring(0, 3) + " " + state.year;
-    document.getElementById("statPoints").textContent = state.records.length;
-    document.getElementById("statDocs").textContent = state.documents.length || (state.records.length ? "—" : 0);
+    document.getElementById("statPoints").textContent = cur.length;
+    document.getElementById("statDocs").textContent = state.documents.length || (cur.length ? "—" : 0);
 
     // Cargar comparativa en segundo plano
     loadPreviousPeriodComparison().then(function () {
@@ -1676,7 +1738,7 @@
     });
 
     let valid = 0, inc = 0, pend = 0;
-    state.records.forEach(r => {
+    cur.forEach(function (r) {
       evaluateRecord(r);
       if (r.estado === "validado") valid++;
       else if (r.estado === "incidencia") inc++;
@@ -1688,7 +1750,7 @@
     const statusEl = document.getElementById("statStatus");
     const card = document.getElementById("statStatusCard");
     card.classList.remove("ok", "warn", "danger");
-    if (state.records.length === 0) {
+    if (cur.length === 0) {
       statusEl.textContent = "Vacío";
     } else if (inc > 0) {
       statusEl.textContent = "Incidencias";
@@ -1703,11 +1765,17 @@
 
     // Validation summary
     const vs = document.getElementById("validationSummary");
-    if (state.records.length === 0) {
-      vs.innerHTML = "<p style='color:var(--muted);'>Sin registros. Importe datos o cargue la demo.</p>";
+    var otros = state.records.length - cur.length;
+    if (cur.length === 0) {
+      vs.innerHTML = "<p style='color:var(--muted);'>Sin registros en <strong>" + monthName(state.month) + " " + state.year +
+        "</strong>. Importe datos (la fecha de recogida del PDF define el mes) o cargue la demo.</p>" +
+        (otros > 0 ? "<p class='alert alert-info' style='margin-top:0.5rem;'>Hay " + otros +
+          " registro(s) en otros periodos. Cámbielo en el Panel o revise el histórico.</p>" : "");
     } else {
       let html = "<ul style='padding-left:1.2rem;font-size:0.9rem;'>";
-      html += "<li>Registros totales: <strong>" + state.records.length + "</strong></li>";
+      html += "<li>Periodo activo: <strong>" + monthName(state.month) + " " + state.year + "</strong></li>";
+      html += "<li>Registros de este mes: <strong>" + cur.length + "</strong>" +
+        (otros ? " <span style='color:var(--muted)'>(+" + otros + " en otros meses)</span>" : "") + "</li>";
       html += "<li>Validados: <strong style='color:var(--success)'>" + valid + "</strong></li>";
       html += "<li>Incidencias: <strong style='color:var(--danger)'>" + inc + "</strong></li>";
       html += "<li>Pendientes de revisión: <strong>" + pend + "</strong></li>";
@@ -1839,6 +1907,32 @@
       }
     }
     fileInput.value = "";
+    // Si los datos importados corresponden a otro mes, cambiar el periodo activo
+    var newRecs = state.records.slice(before);
+    if (newRecs.length) {
+      var counts = {};
+      newRecs.forEach(function (r) {
+        ensureRecordPeriodo(r);
+        counts[r.periodo] = (counts[r.periodo] || 0) + 1;
+      });
+      var best = null, bestN = 0;
+      Object.keys(counts).forEach(function (k) {
+        if (counts[k] > bestN) { bestN = counts[k]; best = k; }
+      });
+      if (best && best !== periodKey()) {
+        var parts = best.split("-");
+        state.year = parseInt(parts[0], 10);
+        state.month = parts[1];
+        document.getElementById("selYear").value = state.year;
+        document.getElementById("selMonth").value = state.month;
+        log("Periodo ajustado automáticamente a " + best + " según fecha de recogida de los PDF");
+      }
+      // Informar si hay varios periodos en la misma importación
+      var nPeriods = Object.keys(counts).length;
+      if (nPeriods > 1) {
+        log("Importación con " + nPeriods + " periodos distintos: " + Object.keys(counts).join(", "));
+      }
+    }
     showImportSummary(results);
     updateDashboard();
     checkAndAlertIncidences(before);
@@ -1937,11 +2031,25 @@
     if (m) hongosPat = parseNumeric(m[1]);
 
     let fecha = "";
-    m = t.match(/Fecha\s*de\s*recogida\s*[:\t]\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i);
+    // Formatos: 25/08/2026 · 25-08-2026 · 2026-08-25 · texto con espacios (PDF.js)
+    m = t.match(/Fecha\s*de\s*recogida\s*[:\s]*(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{2,4})/i);
     if (m) {
-      const p = m[1].split(/[\/\-]/);
-      if (p[2].length === 4) fecha = p[2] + "-" + p[1].padStart(2,"0") + "-" + p[0].padStart(2,"0");
-      else fecha = "20" + p[2] + "-" + p[1].padStart(2,"0") + "-" + p[0].padStart(2,"0");
+      var yy = m[3].length === 2 ? "20" + m[3] : m[3];
+      fecha = yy + "-" + String(m[2]).padStart(2, "0") + "-" + String(m[1]).padStart(2, "0");
+    }
+    if (!fecha) {
+      m = t.match(/Fecha\s*de\s*recogida\s*[:\s]*(\d{4})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{1,2})/i);
+      if (m) fecha = m[1] + "-" + String(m[2]).padStart(2, "0") + "-" + String(m[3]).padStart(2, "0");
+    }
+    // Fallback: mes en el nombre de archivo (… Agosto 2026 …)
+    if (!fecha && origen) {
+      var mesNombres = { enero: "01", febrero: "02", marzo: "03", abril: "04", mayo: "05", junio: "06",
+        julio: "07", agosto: "08", septiembre: "09", octubre: "10", noviembre: "11", diciembre: "12" };
+      var fm = String(origen).match(/(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\s*(20\d{2})/i);
+      if (fm) {
+        var mm = mesNombres[fm[1].toLowerCase()] || "01";
+        fecha = fm[2] + "-" + mm + "-15";
+      }
     }
     let informeNro = "";
     m = t.match(/INFORME\s*(?:N[º°]|No|Nº|#)?\s*:?\s*(\d+\w*)/i);
@@ -1956,13 +2064,14 @@
       aerobios: aerobios,
       hongosNP: hongosNP,
       hongosPat: hongosPat,
-      fechaRecogida: fecha || (state.year + "-" + state.month + "-15"),
+      fechaRecogida: fecha || (state.year + "-" + String(state.month).padStart(2, "0") + "-15"),
       documentoOrigen: origen || (informeNro ? "Lab " + informeNro : "Texto laboratorio"),
       informeNro: informeNro,
       observaciones: identNP ? "Identificación: " + identNP : "",
       estado: "pendiente",
       tipoMuestreo: "programado"
     };
+    ensureRecordPeriodo(rec);
     evaluateRecord(rec);
     state.records.push(rec);
     return 1;
@@ -2000,13 +2109,14 @@
         aerobios: parseNumeric(get(["aerobios", "mesofilos", "mesófilos", "ufc"])),
         hongosNP: parseNumeric(get(["hongos np", "hongos no", "no patogenos", "no patógenos", "n.p."])) || "No detectado",
         hongosPat: parseNumeric(get(["hongos pat", "patogenos", "patógenos"])) || "No detectado",
-        fechaRecogida: get(["fecha", "recogida", "muestreo"]) || (state.year + "-" + state.month + "-15"),
+        fechaRecogida: normalizeFechaISO(get(["fecha", "recogida", "muestreo"])) || (state.year + "-" + String(state.month).padStart(2, "0") + "-15"),
         documentoOrigen: origen || "CSV",
         observaciones: get(["obs", "observaciones", "notas"]) || "",
         estado: "pendiente",
         tipoMuestreo: (get(["tipo", "muestreo"]) || "").toLowerCase().includes("remuestre") ? "remuestreo" : "programado",
         motivoRemuestreo: get(["motivo"]) || ""
       };
+      ensureRecordPeriodo(rec);
       evaluateRecord(rec);
       state.records.push(rec);
       count++;
@@ -2028,13 +2138,15 @@
         aerobios: parseNumeric(item.aerobios ?? item.aerobiosMesofilos),
         hongosNP: parseNumeric(item.hongosNP ?? item.hongosNoPatogenos) || "No detectado",
         hongosPat: parseNumeric(item.hongosPat ?? item.hongosPatogenos) || "No detectado",
-        fechaRecogida: item.fechaRecogida || item.fecha || (state.year + "-" + state.month + "-15"),
+        fechaRecogida: normalizeFechaISO(item.fechaRecogida || item.fecha) || (state.year + "-" + String(state.month).padStart(2, "0") + "-15"),
         documentoOrigen: origen || item.documentoOrigen || "JSON",
         observaciones: item.observaciones || "",
         estado: item.estado || "pendiente",
         tipoMuestreo: item.tipoMuestreo || "programado",
-        motivoRemuestreo: item.motivoRemuestreo || ""
+        motivoRemuestreo: item.motivoRemuestreo || "",
+        periodoIncidencia: item.periodoIncidencia || ""
       };
+      ensureRecordPeriodo(rec);
       evaluateRecord(rec);
       state.records.push(rec);
     });
@@ -2046,20 +2158,27 @@
 
   // Demo
   document.getElementById("btnLoadDemo").addEventListener("click", () => {
-    if (state.records.length && !confirm("Se añadirán los datos de agosto 2026. ¿Continuar?")) return;
+    if (state.records.length && !confirm("Se cargarán datos de demostración (uso docente). ¿Continuar?")) return;
     state.year = 2026;
     state.month = "08";
     document.getElementById("selYear").value = 2026;
     document.getElementById("selMonth").value = "08";
-    DEMO_AGOSTO.forEach(d => {
+    // Sustituir solo registros del periodo demo (no mezclar con otros meses)
+    state.records = state.records.filter(function (r) {
+      ensureRecordPeriodo(r);
+      return r.periodo !== "2026-08";
+    });
+    DEMO_DATA.forEach(function (d) {
       const rec = Object.assign({}, d);
+      ensureRecordPeriodo(rec);
       evaluateRecord(rec);
       state.records.push(rec);
     });
-    state.documents.push({ name: "Informe Definitivo Agosto 2026", date: new Date().toISOString() });
-    log("Cargada demostración Agosto 2026 (" + DEMO_AGOSTO.length + " registros)");
+    state.documents.push({ name: "Demo docente BSA", date: new Date().toISOString() });
+    log("Cargada demostración docente (" + DEMO_DATA.length + " registros; incluye 1 incidencia por hongo patógeno)");
     updateDashboard();
     updatePeriodInfo();
+    alert("Demo cargada (agosto 2026).\nQuirófano 3 incluye hongo patógeno → practique protocolo y remuestreo.");
   });
 
   // Manual
@@ -2086,13 +2205,15 @@
       aerobios: parseNumeric(document.getElementById("manAerobios").value),
       hongosNP: parseNumeric(document.getElementById("manHongosNP").value) || "No detectado",
       hongosPat: parseNumeric(document.getElementById("manHongosPat").value) || "No detectado",
-      fechaRecogida: document.getElementById("manFecha").value || (state.year + "-" + state.month + "-15"),
+      fechaRecogida: normalizeFechaISO(document.getElementById("manFecha").value) || (state.year + "-" + String(state.month).padStart(2, "0") + "-15"),
       documentoOrigen: tipo === "remuestreo" ? "Remuestreo (entrada manual)" : "Entrada manual",
       observaciones: document.getElementById("manObs").value || "",
       estado: "pendiente",
       tipoMuestreo: tipo,
-      motivoRemuestreo: tipo === "remuestreo" ? (motivo || "Remuestreo tras desinfección") : ""
+      motivoRemuestreo: tipo === "remuestreo" ? (motivo || "Remuestreo tras desinfección") : "",
+      periodoIncidencia: tipo === "remuestreo" ? periodKey() : ""
     };
+    ensureRecordPeriodo(rec);
     evaluateRecord(rec);
     state.records.push(rec);
     log((tipo === "remuestreo" ? "Remuestreo" : "Registro") + " manual añadido: " + rec.punto);
@@ -2176,8 +2297,12 @@
     tbody.innerHTML = "";
     let shown = 0;
     let pendRem = 0;
+    var pk = periodKey();
     state.records.forEach(function (rec, idx) {
       if (!rec.tipoMuestreo) rec.tipoMuestreo = "programado";
+      ensureRecordPeriodo(rec);
+      // Solo el periodo seleccionado en el panel
+      if ((rec.periodo || "") !== pk) return;
       if (filter && !rec.punto.toLowerCase().includes(filter)) return;
       if (estFilter && rec.estado !== estFilter) return;
       if (tipoFilter && rec.tipoMuestreo !== tipoFilter) return;
@@ -2227,7 +2352,9 @@
       tbody.appendChild(tr);
     });
     var extra = pendRem > 0 ? " · <strong style='color:var(--warning)'>" + pendRem + " remuestreo(s) pendiente(s)</strong>" : "";
-    document.getElementById("reviewCount").innerHTML = shown + " registros mostrados (total " + state.records.length + ")" + extra;
+    var otrosN = state.records.length - recordsCurrent().length;
+    document.getElementById("reviewCount").innerHTML = shown + " en " + monthName(state.month) + " " + state.year +
+      (otrosN ? " · <span style='color:var(--muted)'>" + otrosN + " en otros periodos</span>" : "") + extra;
 
     tbody.querySelectorAll("input").forEach(function (inp) {
       inp.addEventListener("change", function () {
@@ -2280,6 +2407,8 @@
 
     const hoy = new Date();
     const fecha = hoy.getFullYear() + "-" + String(hoy.getMonth() + 1).padStart(2, "0") + "-" + String(hoy.getDate()).padStart(2, "0");
+    ensureRecordPeriodo(orig);
+    // El remuestreo pertenece al periodo del muestreo fallido (puede ser mes anterior a la fecha de recogida del remuestreo)
     const rec = {
       punto: orig.punto,
       nivelRiesgo: orig.nivelRiesgo,
@@ -2293,8 +2422,10 @@
       tipoMuestreo: "remuestreo",
       motivoRemuestreo: motivo,
       refIncidenciaPunto: orig.punto,
-      refIncidenciaFecha: orig.fechaRecogida
+      refIncidenciaFecha: orig.fechaRecogida,
+      periodoIncidencia: orig.periodo || periodKey()
     };
+    ensureRecordPeriodo(rec);
     state.records.push(rec);
     log("Remuestreo pendiente creado para " + orig.punto + " (" + motivo + ")");
     alert(
@@ -2409,9 +2540,11 @@
     const tipo = state.config.tipoMuestra;
     const periodoTxt = monthName(state.month) + " " + state.year;
     const fechaInforme = new Date().toLocaleDateString("es-ES");
+    state.records.forEach(ensureRecordPeriodo);
+    const reportRecs = recordsCurrent();
 
-    // Fechas de recogida
-    const fechas = [...new Set(state.records.map(r => r.fechaRecogida).filter(Boolean))];
+    // Fechas de recogida (solo del periodo)
+    const fechas = [...new Set(reportRecs.map(r => r.fechaRecogida).filter(Boolean))];
     const fechaRecogida = fechas.length === 1 ? formatDateES(fechas[0]) : (fechas.map(formatDateES).join(", ") || "—");
 
     let html = "";
@@ -2439,8 +2572,8 @@
     html += "<tr><td><strong>Fecha de recogida</strong></td><td>" + esc(fechaRecogida) + "</td></tr>";
     html += "<tr><td><strong>Fecha informe</strong></td><td>" + esc(fechaInforme) + "</td></tr></table>";
 
-    const programados = state.records.filter(function (r) { return (r.tipoMuestreo || "programado") !== "remuestreo"; });
-    const remuestreos = state.records.filter(function (r) { return r.tipoMuestreo === "remuestreo"; });
+    const programados = reportRecs.filter(function (r) { return (r.tipoMuestreo || "programado") !== "remuestreo"; });
+    const remuestreos = reportRecs.filter(function (r) { return r.tipoMuestreo === "remuestreo"; });
 
     html += "<h3 style='font-size:1rem;margin:0.8rem 0 0.4rem;'>Muestreos programados</h3>";
     html += "<table><thead><tr>";
@@ -2484,19 +2617,19 @@
       html += "</tbody></table>";
     }
 
-    // Conclusiones automáticas basadas en datos
-    const incidencias = state.records.filter(function (r) { return r.estado === "incidencia"; });
-    const validados = state.records.filter(function (r) { return r.estado === "validado"; });
+    // Conclusiones automáticas basadas en datos del periodo
+    const incidencias = reportRecs.filter(function (r) { return r.estado === "incidencia"; });
+    const validados = reportRecs.filter(function (r) { return r.estado === "validado"; });
     const puntosOK = validados.filter(function (r) { return (r.tipoMuestreo || "programado") !== "remuestreo"; }).map(function (r) { return r.punto; });
-    const reqRem = state.records.filter(function (r) {
+    const reqRem = reportRecs.filter(function (r) {
       return r.requiereRemuestreo && (r.tipoMuestreo || "programado") === "programado";
     });
     const remOk = remuestreos.filter(function (r) { return r.estado === "validado"; });
     const remPend = remuestreos.filter(function (r) { return r.estado === "pendiente" || r.estado === "incidencia"; });
 
     html += "<div class='conclusion'>";
-    if (state.records.length === 0) {
-      html += "<p>No hay datos de muestreo para el periodo seleccionado.</p>";
+    if (reportRecs.length === 0) {
+      html += "<p>No hay datos de muestreo para el periodo seleccionado (" + periodoTxt + ").</p>";
     } else if (incidencias.length === 0) {
       html += "<p><strong>Se confirma Bioseguridad ambiental</strong> en los puntos analizados: " +
         esc(puntosOK.join(", ")) + ".</p>";
@@ -2586,13 +2719,13 @@
     // Pie de trazabilidad
     html += "<p style='margin-top:2rem;font-size:0.8rem;color:#666;border-top:1px solid #ccc;padding-top:0.6rem;'>";
     html += "Generado por BSA Manager (Dr. José Manuel Fernández Carreira) · Periodo " + periodKey() +
-      " · " + state.records.length + " registros · Umbrales configurables · No constituye certificación normativa.";
+      " · " + reportRecs.length + " registros · Umbrales configurables · No constituye certificación normativa.";
     html += "</p>";
 
     preview.innerHTML = html;
     document.getElementById("reportStatus").textContent = "Generado " + new Date().toLocaleTimeString("es-ES");
     document.getElementById("reportStatus").className = "badge badge-ok";
-    log("Informe generado para " + periodKey() + " (" + state.records.length + " puntos)");
+    log("Informe generado para " + periodKey() + " (" + reportRecs.length + " puntos del periodo)");
   }
 
   function formatDateES(iso) {
@@ -2711,24 +2844,59 @@
     });
   }
 
-  document.getElementById("btnResetProject").addEventListener("click", () => {
-    if (!confirm("¿Borrar todos los datos y reiniciar la aplicación?")) return;
+  document.getElementById("btnResetProject").addEventListener("click", async function () {
+    if (!confirm("¿REINICIAR TODO el proyecto?\n\nSe borrarán:\n• Registros de revisión\n• Checklist de protocolo\n• Informe en pantalla\n• localStorage\n• Histórico IndexedDB (todos los periodos)")) return;
+    if (!confirm("Confirmación adicional: se vaciará también el HISTÓRICO de muestreos guardados. Esta acción no se puede deshacer. ¿Continuar?")) return;
+
     state.records = [];
     state.documents = [];
     state.points = JSON.parse(JSON.stringify(DEFAULT_POINTS));
+    state.prevByPoint = {};
+    state.prevPeriodId = null;
+    state.log = [];
+    var n = new Date();
+    state.year = n.getFullYear();
+    state.month = String(n.getMonth() + 1).padStart(2, "0");
     state.config = {
       thrR4: 10, thrR3: 150, thrR2: 200, thrR1: 200,
       thrHongosR4: 0, thrHongosR3: 0, thrHongosR2: 10, thrHongosR1: 25,
       thrHongosPat: 0,
       hospital: "Hospital de Jarrio",
       responsable: "",
-      tipoMuestra: "Aire de ambiente interior"
+      tipoMuestra: "Aire de ambiente interior",
+      areaSanitaria: "Área Sanitaria I",
+      logoPath: "docs/logo_sespa.png"
     };
-    localStorage.removeItem("bsa_manager_project");
-    log("Proyecto reiniciado");
+    state.protocol.forEach(function (s) { s.done = false; s.fecha = ""; s.responsable = ""; });
+
+    try { localStorage.removeItem("bsa_manager_project"); } catch (e) {}
+    try { await idbClear(); } catch (e) { log("Aviso IndexedDB: " + e.message); }
+
+    document.getElementById("selYear").value = state.year;
+    document.getElementById("selMonth").value = state.month;
+    if (document.getElementById("cfgHospital")) document.getElementById("cfgHospital").value = state.config.hospital;
+    if (document.getElementById("cfgAreaSanitaria")) document.getElementById("cfgAreaSanitaria").value = state.config.areaSanitaria;
+    if (document.getElementById("cfgResponsable")) document.getElementById("cfgResponsable").value = "";
+    if (document.getElementById("cfgTipoMuestra")) document.getElementById("cfgTipoMuestra").value = state.config.tipoMuestra;
+    if (document.getElementById("importSummaryCard")) document.getElementById("importSummaryCard").style.display = "none";
+    if (document.getElementById("reportPreview")) {
+      document.getElementById("reportPreview").innerHTML = "<p style='text-align:center;color:var(--muted);'>Pulse «Generar / Actualizar informe».</p>";
+    }
+    if (document.getElementById("reportStatus")) {
+      document.getElementById("reportStatus").textContent = "Sin generar";
+      document.getElementById("reportStatus").className = "badge badge-warn";
+    }
+    document.body.classList.remove("read-only");
+    var roBtn = document.getElementById("btnToggleReadonly");
+    if (roBtn) roBtn.textContent = "Modo solo lectura";
+
+    updateHeaderMeta();
     updateDashboard();
     renderPointsTable();
-    document.getElementById("reportPreview").innerHTML = "<p style='text-align:center;color:var(--muted);'>Pulse «Generar / Actualizar informe».</p>";
+    renderProtocolChecklist();
+    if (typeof refreshHistoryTable === "function") refreshHistoryTable();
+    log("Proyecto reiniciado por completo (datos, checklist, localStorage e IndexedDB)");
+    alert("Aplicación reiniciada. Histórico y datos en pantalla eliminados.");
   });
 
   function restoreProject(data) {
@@ -2899,21 +3067,23 @@
 
   // —— Histórico listeners ——
   document.getElementById("btnSaveToHistory").addEventListener("click", async () => {
-    if (!state.records.length) { alert("No hay registros en el periodo actual."); return; }
+    state.records.forEach(ensureRecordPeriodo);
+    const cur = recordsCurrent();
+    if (!cur.length) { alert("No hay registros en el periodo actual (" + periodKey() + ")."); return; }
     const id = periodKey();
     const obj = {
-      id,
+      id: id,
       year: state.year,
       month: state.month,
-      records: JSON.parse(JSON.stringify(state.records)),
+      records: JSON.parse(JSON.stringify(cur)),
       hospital: state.config.hospital,
       savedAt: new Date().toISOString()
     };
     try {
       await idbPutPeriod(obj);
-      log("Histórico: guardado " + id + " (" + state.records.length + " registros)");
+      log("Histórico: guardado " + id + " (" + cur.length + " registros del periodo)");
       refreshHistoryTable();
-      alert("Periodo " + id + " guardado en el histórico.");
+      alert("Periodo " + id + " guardado en el histórico (" + cur.length + " registros).");
     } catch (e) {
       alert("Error al guardar: " + e.message);
     }
