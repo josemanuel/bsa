@@ -581,6 +581,17 @@
         </div>
         <div class="row">
           <div>
+            <label>Tipo de muestreo</label>
+            <select id="manTipo">
+              <option value="programado">Programado (calendario)</option>
+              <option value="remuestreo">Remuestreo (tras desinfección)</option>
+            </select>
+          </div>
+          <div>
+            <label>Motivo del remuestreo (si aplica)</label>
+            <input type="text" id="manMotivoRem" placeholder="Ej. Hongos N.P. > límite / Hongos patógenos">
+          </div>
+          <div>
             <label>Observaciones</label>
             <input type="text" id="manObs">
           </div>
@@ -604,14 +615,24 @@
             <option value="pendiente">Pendientes</option>
             <option value="incidencia">Incidencias</option>
           </select>
+          <select id="filterTipo" style="max-width:160px;">
+            <option value="">Programados y remuestreos</option>
+            <option value="programado">Solo programados</option>
+            <option value="remuestreo">Solo remuestreos</option>
+          </select>
           <button class="btn btn-sm btn-secondary" id="btnRefreshTable">Actualizar</button>
           <div class="spacer"></div>
           <button class="btn btn-sm btn-danger" id="btnClearAll" title="Eliminar todos los registros">Vaciar datos</button>
+        </div>
+        <div class="alert alert-info" style="font-size:0.85rem;margin-bottom:0.75rem;">
+          <strong>Remuestreos:</strong> cuando un muestreo programado incumple por <em>hongos</em> (N.P. según umbral del riesgo o cualquier patógeno),
+          se debe activar desinfección y un <strong>remuestreo</strong>. Use el botón «Remuestreo» en la incidencia o registre el resultado del remuestreo como tipo Remuestreo.
         </div>
         <div style="overflow-x:auto;">
           <table class="data" id="reviewTable">
             <thead>
               <tr>
+                <th>Tipo</th>
                 <th>Punto</th>
                 <th>Riesgo</th>
                 <th>Fecha</th>
@@ -656,8 +677,9 @@
       <div class="card">
         <h2>Añadir nuevo punto de muestreo</h2>
         <p style="font-size:0.85rem;color:var(--muted);margin-bottom:0.8rem;">
-          Seleccione el área y el tipo de instalación según el Anexo 1 (niveles de riesgo UNE 171340 / algoritmo del hospital).
-          El nivel de riesgo se asigna automáticamente.
+          Los 9 puntos del Hospital de Jarrio ya están cargados. Use este formulario para añadir puntos adicionales
+          (otros quirófanos, salas, o para usar la app en otro centro). Elija área y tipo según la
+          <strong>Tabla 1 UNE 171340:2020</strong>; el nivel de riesgo se asigna automáticamente.
         </p>
         <div class="row">
           <div>
@@ -1000,16 +1022,45 @@
   // ========== DATOS MAESTROS ==========
 
   // Catálogo de tipos de instalación (Anexo 1 / algoritmo Hospital de Jarrio)
+  // Tipos de instalación según Tabla 1 UNE 171340:2020 (para alta de puntos en cualquier centro)
   const INSTALLATION_TYPES = [
-    { area: "Quirófanos", tipo: "Quirófano con implantes (OFT, TRA, etc.)", riesgo: "Alto. R4", frecuencia: "MENSUAL", mesesDefault: "1,2,3,4,5,6,7,8,9,10,11,12" },
-    { area: "Quirófanos", tipo: "Quirófano sin implantes", riesgo: "Medio. R3", frecuencia: "MENSUAL", mesesDefault: "1,2,3,4,5,6,7,8,9,10,11,12" },
-    { area: "Quirófanos", tipo: "Quirófano de urgencias", riesgo: "Medio. R3", frecuencia: "MENSUAL", mesesDefault: "1,2,3,4,5,6,7,8,9,10,11,12" },
-    { area: "Críticos / REA / UCI", tipo: "REA / UCI – Box de paciente", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", mesesDefault: "2,5,8,11" },
-    { area: "Críticos / REA / UCI", tipo: "REA / UCI – Control / zona central", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", mesesDefault: "2,5,8,11" },
-    { area: "Críticos / REA / UCI", tipo: "UCI neonatal / pediátrica", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", mesesDefault: "2,5,8,11" },
-    { area: "Endoscopias y procedimientos", tipo: "Sala de endoscopias", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
-    { area: "Esterilización", tipo: "Área estéril (proceso y empaquetado)", riesgo: "Medio. R3", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
-    { area: "Esterilización", tipo: "Zona limpia / almacenaje de material estéril", riesgo: "Ligero. R1", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" }
+    // R5
+    { area: "Área quirúrgica", tipo: "Quirófano alto riesgo – Flujo unidireccional (ISO 5)", riesgo: "Muy alto. R5", frecuencia: "MENSUAL", mesesDefault: "1,2,3,4,5,6,7,8,9,10,11,12" },
+    // R4
+    { area: "Área quirúrgica", tipo: "Quirófano alto riesgo – Flujo mezcla (trasplantes / implante prótesis)", riesgo: "Alto. R4", frecuencia: "MENSUAL", mesesDefault: "1,2,3,4,5,6,7,8,9,10,11,12" },
+    { area: "Área quirúrgica", tipo: "Quirófano ambulatorio alto riesgo (oftalmología LIO, ortopedia/trauma)", riesgo: "Alto. R4", frecuencia: "MENSUAL", mesesDefault: "1,2,3,4,5,6,7,8,9,10,11,12" },
+    // R3
+    { area: "Área quirúrgica", tipo: "Quirófano convencional (cirugía convencional y urgencias)", riesgo: "Medio. R3", frecuencia: "MENSUAL", mesesDefault: "1,2,3,4,5,6,7,8,9,10,11,12" },
+    { area: "Área quirúrgica", tipo: "Quirófano ambulatorio convencional", riesgo: "Medio. R3", frecuencia: "MENSUAL", mesesDefault: "1,2,3,4,5,6,7,8,9,10,11,12" },
+    { area: "Obstetricia", tipo: "Paritorio", riesgo: "Medio. R3", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Hospitalización", tipo: "Sala aislamiento infecciosos con inmunodepresión", riesgo: "Medio. R3", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Hospitalización", tipo: "Sala aislamiento protector (inmunodeprimidos)", riesgo: "Medio. R3", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Diagnóstico", tipo: "Radiología vascular intervencionista / Hemodinámica", riesgo: "Medio. R3", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Diagnóstico", tipo: "Artroscopia", riesgo: "Medio. R3", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Otras áreas", tipo: "Esterilización – Proceso y empaquetado", riesgo: "Medio. R3", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Otras áreas", tipo: "Almacén de productos estériles", riesgo: "Medio. R3", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Otras áreas", tipo: "Sala preparación de citostáticos (presión negativa)", riesgo: "Medio. R3", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    // R2
+    { area: "Área quirúrgica", tipo: "Pasillo limpio y esclusas de área quirúrgica", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Área quirúrgica", tipo: "Pre y postoperatorio (salas de despertar)", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Hospitalización", tipo: "Sala aislamiento de infecciosos (presión negativa)", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Hospitalización", tipo: "Esclusa de infecciosos (presión negativa)", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Hospitalización", tipo: "Esclusa de aislamiento protector", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Unidades especiales", tipo: "Unidad de cuidados intensivos (UCI) / REA – Box", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", mesesDefault: "2,5,8,11" },
+    { area: "Unidades especiales", tipo: "UCI / REA – Control / zona central", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", mesesDefault: "2,5,8,11" },
+    { area: "Unidades especiales", tipo: "UCI neonatal / pediátrica", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", mesesDefault: "2,5,8,11" },
+    { area: "Diagnóstico", tipo: "Endoscopia / Endoscopias", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Otras áreas", tipo: "Sala/esclusas preparación alimentación parenteral/citostáticos", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    // R1
+    { area: "Área quirúrgica", tipo: "Pasillo sucio de área quirúrgica", riesgo: "Ligero. R1", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Obstetricia", tipo: "Dilatación y postparto", riesgo: "Ligero. R1", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Hospitalización", tipo: "Pasillo de infecciosos (presión negativa)", riesgo: "Ligero. R1", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Diagnóstico", tipo: "Zona de lavado de equipamiento endoscópico", riesgo: "Ligero. R1", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Otras áreas", tipo: "Esterilización – Sucio / zona limpia almacenaje", riesgo: "Ligero. R1", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Otras áreas", tipo: "Salas de farmacotecnia", riesgo: "Ligero. R1", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Otras áreas", tipo: "Laboratorio de microbiología (hasta agentes Nivel 2)", riesgo: "Ligero. R1", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Otras áreas", tipo: "Boxes de urgencias", riesgo: "Ligero. R1", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" },
+    { area: "Otras áreas", tipo: "Áreas de diálisis", riesgo: "Ligero. R1", frecuencia: "TRIMESTRAL", mesesDefault: "1,4,7,10" }
   ];
 
   // ========== INDEXEDDB HISTÓRICO ==========
@@ -1233,6 +1284,9 @@
   }
 
 
+  // Puntos de muestreo del Hospital de Jarrio (calendario habitual).
+  // Otros centros pueden añadir puntos desde Configuración → «Añadir nuevo punto de muestreo»
+  // usando los tipos de la Tabla 1 UNE 171340:2020.
   const DEFAULT_POINTS = [
     { id: "Q1", nombre: "Quirófano 1", riesgo: "Alto. R4", frecuencia: "MENSUAL", meses: [1,2,3,4,5,6,7,8,9,10,11,12], nota: "Implantes (OFT y TRA)" },
     { id: "Q2", nombre: "Quirófano 2", riesgo: "Medio. R3", frecuencia: "MENSUAL", meses: [1,2,3,4,5,6,7,8,9,10,11,12], nota: "No implantes" },
@@ -1328,7 +1382,8 @@
   function riskCode(riesgo) {
     if (!riesgo) return null;
     const r = riesgo.toUpperCase();
-    if (r.includes("R4") || r.includes("ALTO")) return "R4";
+    if (r.includes("R5") || r.includes("MUY ALTO")) return "R5";
+    if (r.includes("R4") || (r.includes("ALTO") && !r.includes("MUY"))) return "R4";
     if (r.includes("R3") || r.includes("MEDIO")) return "R3";
     if (r.includes("R2") || r.includes("MODERADO")) return "R2";
     if (r.includes("R1") || r.includes("LIGERO")) return "R1";
@@ -1340,10 +1395,11 @@
     const code = riskCode(rec.nivelRiesgo);
     const issues = [];
 
-    // Umbral mesófilos según riesgo
+    // Umbral mesófilos según riesgo (R5 usa mismos criterios estrictos que R4 o más)
     let thrAero = null;
     let thrHongos = null;
-    if (code === "R4") { thrAero = state.config.thrR4; thrHongos = state.config.thrHongosR4; }
+    if (code === "R5") { thrAero = Math.min(state.config.thrR4, 5); thrHongos = 0; }
+    else if (code === "R4") { thrAero = state.config.thrR4; thrHongos = state.config.thrHongosR4; }
     else if (code === "R3") { thrAero = state.config.thrR3; thrHongos = state.config.thrHongosR3; }
     else if (code === "R2") { thrAero = state.config.thrR2; thrHongos = state.config.thrHongosR2; }
     else if (code === "R1") { thrAero = state.config.thrR1; thrHongos = state.config.thrHongosR1; }
@@ -1387,13 +1443,28 @@
       }
     }
 
+    // Remuestreo: obligatorio si fallan criterios de hongos (N.P. o patógenos).
+    // Aerobios solos no obligan remuestreo por protocolo de desinfección de hongos.
+    const fungiIssues = issues.filter(function (x) {
+      return /hongos/i.test(x);
+    });
+    rec.requiereRemuestreo = fungiIssues.length > 0;
+    if (fungiIssues.length > 0) {
+      rec.motivoRemuestreoSugerido = fungiIssues.join("; ");
+    }
+
     if (issues.length > 0) {
       rec.estado = "incidencia";
       rec._issues = issues;
     } else {
       rec.estado = "validado";
       rec._issues = [];
+      // Si es remuestreo y cumple, se considera cerrado el ciclo
+      if (rec.tipoMuestreo === "remuestreo") {
+        rec.observaciones = (rec.observaciones ? rec.observaciones + " · " : "") + "Remuestreo conforme tras desinfección";
+      }
     }
+    if (!rec.tipoMuestreo) rec.tipoMuestreo = "programado";
     return rec;
   }
 
@@ -1592,12 +1663,19 @@
     const newRecs = state.records.slice(beforeCount);
     const incs = newRecs.filter(r => r.estado === "incidencia");
     if (incs.length > 0) {
-      const msg = "⚠ ALERTA DE BIOSEGURIDAD\n\n" +
+      const needRem = incs.filter(r => r.requiereRemuestreo);
+      let msg = "⚠ ALERTA DE BIOSEGURIDAD\n\n" +
         incs.length + " punto(s) superan los límites de bioseguridad:\n\n" +
-        incs.map(r => "• " + r.punto + ": " + (r._issues || []).join("; ")).join("\n") +
-        "\n\nRevise la pestaña Revisión y active el protocolo si corresponde.";
+        incs.map(r => "• " + r.punto + ": " + (r._issues || []).join("; ")).join("\n");
+      if (needRem.length) {
+        msg += "\n\n" + needRem.length + " caso(s) por HONGOS → desinfección + remuestreo obligatorios.\n" +
+          "En Revisión use el botón «Remuestreo» para cada punto afectado.";
+      } else {
+        msg += "\n\nRevise la pestaña Revisión y active el protocolo si corresponde.";
+      }
       alert(msg);
-      log("ALERTA: " + incs.length + " incidencia(s) detectada(s) tras importación");
+      log("ALERTA: " + incs.length + " incidencia(s) detectada(s) tras importación" +
+        (needRem.length ? " (" + needRem.length + " req. remuestreo)" : ""));
     }
   }
 
@@ -1706,7 +1784,8 @@
       documentoOrigen: origen || (informeNro ? "Lab " + informeNro : "Texto laboratorio"),
       informeNro: informeNro,
       observaciones: identNP ? "Identificación: " + identNP : "",
-      estado: "pendiente"
+      estado: "pendiente",
+      tipoMuestreo: "programado"
     };
     evaluateRecord(rec);
     state.records.push(rec);
@@ -1748,7 +1827,9 @@
         fechaRecogida: get(["fecha", "recogida", "muestreo"]) || (state.year + "-" + state.month + "-15"),
         documentoOrigen: origen || "CSV",
         observaciones: get(["obs", "observaciones", "notas"]) || "",
-        estado: "pendiente"
+        estado: "pendiente",
+        tipoMuestreo: (get(["tipo", "muestreo"]) || "").toLowerCase().includes("remuestre") ? "remuestreo" : "programado",
+        motivoRemuestreo: get(["motivo"]) || ""
       };
       evaluateRecord(rec);
       state.records.push(rec);
@@ -1774,7 +1855,9 @@
         fechaRecogida: item.fechaRecogida || item.fecha || (state.year + "-" + state.month + "-15"),
         documentoOrigen: origen || item.documentoOrigen || "JSON",
         observaciones: item.observaciones || "",
-        estado: item.estado || "pendiente"
+        estado: item.estado || "pendiente",
+        tipoMuestreo: item.tipoMuestreo || "programado",
+        motivoRemuestreo: item.motivoRemuestreo || ""
       };
       evaluateRecord(rec);
       state.records.push(rec);
@@ -1819,6 +1902,8 @@
     document.getElementById("manualCard").style.display = "none";
   });
   document.getElementById("btnSaveManual").addEventListener("click", () => {
+    const tipo = (document.getElementById("manTipo") && document.getElementById("manTipo").value) || "programado";
+    const motivo = (document.getElementById("manMotivoRem") && document.getElementById("manMotivoRem").value) || "";
     const rec = {
       punto: document.getElementById("manPunto").value,
       nivelRiesgo: document.getElementById("manRiesgo").value,
@@ -1826,17 +1911,21 @@
       hongosNP: parseNumeric(document.getElementById("manHongosNP").value) || "No detectado",
       hongosPat: parseNumeric(document.getElementById("manHongosPat").value) || "No detectado",
       fechaRecogida: document.getElementById("manFecha").value || (state.year + "-" + state.month + "-15"),
-      documentoOrigen: "Entrada manual",
+      documentoOrigen: tipo === "remuestreo" ? "Remuestreo (entrada manual)" : "Entrada manual",
       observaciones: document.getElementById("manObs").value || "",
-      estado: "pendiente"
+      estado: "pendiente",
+      tipoMuestreo: tipo,
+      motivoRemuestreo: tipo === "remuestreo" ? (motivo || "Remuestreo tras desinfección") : ""
     };
     evaluateRecord(rec);
     state.records.push(rec);
-    log("Registro manual añadido: " + rec.punto);
+    log((tipo === "remuestreo" ? "Remuestreo" : "Registro") + " manual añadido: " + rec.punto);
     document.getElementById("manualCard").style.display = "none";
     updateDashboard();
     if (rec.estado === "incidencia") {
-      alert("⚠ ALERTA DE BIOSEGURIDAD\n\n" + rec.punto + ":\n" + (rec._issues || []).join("\n"));
+      var msg = "⚠ ALERTA DE BIOSEGURIDAD\n\n" + rec.punto + ":\n" + (rec._issues || []).join("\n");
+      if (rec.requiereRemuestreo) msg += "\n\nSe requiere desinfección y remuestreo.";
+      alert(msg);
     }
   });
 
@@ -1872,34 +1961,57 @@
     const tbody = document.getElementById("reviewBody");
     const filter = (document.getElementById("filterText").value || "").toLowerCase();
     const estFilter = document.getElementById("filterEstado").value;
+    const tipoFilter = (document.getElementById("filterTipo") && document.getElementById("filterTipo").value) || "";
     tbody.innerHTML = "";
     let shown = 0;
-    state.records.forEach((rec, idx) => {
+    let pendRem = 0;
+    state.records.forEach(function (rec, idx) {
+      if (!rec.tipoMuestreo) rec.tipoMuestreo = "programado";
       if (filter && !rec.punto.toLowerCase().includes(filter)) return;
       if (estFilter && rec.estado !== estFilter) return;
+      if (tipoFilter && rec.tipoMuestreo !== tipoFilter) return;
       shown++;
+      if (rec.requiereRemuestreo && rec.tipoMuestreo === "programado") {
+        // ¿Ya hay remuestreo posterior para este punto?
+        var tieneRem = state.records.some(function (r2, j) {
+          return j !== idx && r2.tipoMuestreo === "remuestreo" && r2.punto === rec.punto;
+        });
+        if (!tieneRem) pendRem++;
+      }
       const tr = document.createElement("tr");
       if (rec.estado === "incidencia") tr.classList.add("inc");
       else if (rec.estado === "validado") tr.classList.add("ok");
 
       const badgeClass = rec.estado === "validado" ? "badge-ok" : (rec.estado === "incidencia" ? "badge-danger" : "badge-warn");
+      const tipoBadge = rec.tipoMuestreo === "remuestreo"
+        ? "<span class='badge badge-info'>Remuestreo</span>"
+        : "<span class='badge' style='background:#e8eef2;color:#334;'>Programado</span>";
+      var acciones = "<button class='btn btn-sm btn-secondary' data-action='reval' data-idx='" + idx + "'>Reval.</button> " +
+        "<button class='btn btn-sm btn-danger' data-action='del' data-idx='" + idx + "'>X</button>";
+      if (rec.requiereRemuestreo && rec.tipoMuestreo !== "remuestreo") {
+        acciones = "<button class='btn btn-sm btn-primary' data-action='remuestreo' data-idx='" + idx + "' title='Registrar o programar remuestreo tras desinfección'>Remuestreo</button> " + acciones;
+      }
+
       tr.innerHTML =
-        "<td>" + esc(rec.punto) + "</td>" +
+        "<td>" + tipoBadge + "</td>" +
+        "<td>" + esc(rec.punto) + (rec.motivoRemuestreo ? "<br><span style='font-size:0.75rem;color:var(--muted)'>" + esc(rec.motivoRemuestreo) + "</span>" : "") + "</td>" +
         "<td>" + esc(rec.nivelRiesgo) + "</td>" +
         "<td>" + esc(rec.fechaRecogida) + "</td>" +
         "<td><input type='text' data-idx='" + idx + "' data-field='aerobios' value='" + escAttr(fmtVal(rec.aerobios)) + "'></td>" +
         "<td><input type='text' data-idx='" + idx + "' data-field='hongosNP' value='" + escAttr(fmtVal(rec.hongosNP)) + "'></td>" +
         "<td><input type='text' data-idx='" + idx + "' data-field='hongosPat' value='" + escAttr(fmtVal(rec.hongosPat)) + "'></td>" +
-        "<td><span class='badge " + badgeClass + "'>" + esc(rec.estado) + "</span></td>" +
+        "<td><span class='badge " + badgeClass + "'>" + esc(rec.estado) + "</span>" +
+          (rec.requiereRemuestreo && rec.tipoMuestreo === "programado" ? "<br><span class='badge badge-warn' style='margin-top:2px'>Req. remuestreo</span>" : "") +
+        "</td>" +
         "<td style='font-size:0.8rem'>" + esc(rec.documentoOrigen || "") + "</td>" +
-        "<td><button class='btn btn-sm btn-secondary' data-action='reval' data-idx='" + idx + "'>Reval.</button> " +
-        "<button class='btn btn-sm btn-danger' data-action='del' data-idx='" + idx + "'>X</button></td>";
+        "<td style='white-space:nowrap'>" + acciones + "</td>";
       tbody.appendChild(tr);
     });
-    document.getElementById("reviewCount").textContent = shown + " registros mostrados (total " + state.records.length + ")";
+    var extra = pendRem > 0 ? " · <strong style='color:var(--warning)'>" + pendRem + " remuestreo(s) pendiente(s)</strong>" : "";
+    document.getElementById("reviewCount").innerHTML = shown + " registros mostrados (total " + state.records.length + ")" + extra;
 
-    tbody.querySelectorAll("input").forEach(inp => {
-      inp.addEventListener("change", () => {
+    tbody.querySelectorAll("input").forEach(function (inp) {
+      inp.addEventListener("change", function () {
         const i = parseInt(inp.dataset.idx, 10);
         const field = inp.dataset.field;
         state.records[i][field] = parseNumeric(inp.value);
@@ -1908,8 +2020,8 @@
         updateDashboard();
       });
     });
-    tbody.querySelectorAll("button").forEach(btn => {
-      btn.addEventListener("click", () => {
+    tbody.querySelectorAll("button").forEach(function (btn) {
+      btn.addEventListener("click", function () {
         const i = parseInt(btn.dataset.idx, 10);
         if (btn.dataset.action === "del") {
           if (confirm("¿Eliminar registro de " + state.records[i].punto + "?")) {
@@ -1921,9 +2033,58 @@
           evaluateRecord(state.records[i]);
           state.records[i].estado = state.records[i]._issues && state.records[i]._issues.length ? "incidencia" : "validado";
           updateDashboard();
+        } else if (btn.dataset.action === "remuestreo") {
+          crearRemuestreoDesdeIncidencia(i);
         }
       });
     });
+  }
+
+  /** Crea un registro de remuestreo a partir de una incidencia por hongos */
+  function crearRemuestreoDesdeIncidencia(idx) {
+    const orig = state.records[idx];
+    if (!orig) return;
+    const motivo = orig.motivoRemuestreoSugerido || orig.motivoRemuestreo ||
+      (orig._issues ? orig._issues.filter(function (x) { return /hongos/i.test(x); }).join("; ") : "Incumplimiento por hongos");
+    const ya = state.records.some(function (r) {
+      return r.tipoMuestreo === "remuestreo" && r.punto === orig.punto && r.estado === "pendiente";
+    });
+    if (ya && !confirm("Ya hay un remuestreo pendiente para «" + orig.punto + "». ¿Crear otro?")) return;
+
+    const modo = confirm(
+      "REMUESTREO – «" + orig.punto + "»\n\n" +
+      "Motivo: " + motivo + "\n\n" +
+      "Aceptar = registrar remuestreo PENDIENTE (resultados aún no disponibles; tras desinfección).\n" +
+      "Cancelar = no crear registro."
+    );
+    if (!modo) return;
+
+    const hoy = new Date();
+    const fecha = hoy.getFullYear() + "-" + String(hoy.getMonth() + 1).padStart(2, "0") + "-" + String(hoy.getDate()).padStart(2, "0");
+    const rec = {
+      punto: orig.punto,
+      nivelRiesgo: orig.nivelRiesgo,
+      aerobios: null,
+      hongosNP: "",
+      hongosPat: "",
+      fechaRecogida: fecha,
+      documentoOrigen: "Remuestreo pendiente",
+      observaciones: "Tras desinfección por: " + motivo,
+      estado: "pendiente",
+      tipoMuestreo: "remuestreo",
+      motivoRemuestreo: motivo,
+      refIncidenciaPunto: orig.punto,
+      refIncidenciaFecha: orig.fechaRecogida
+    };
+    state.records.push(rec);
+    log("Remuestreo pendiente creado para " + orig.punto + " (" + motivo + ")");
+    alert(
+      "Remuestreo pendiente creado para «" + orig.punto + "».\n\n" +
+      "Cuando llegue el informe del laboratorio, edite los resultados en Revisión " +
+      "o importe el PDF y asígnele tipo Remuestreo.\n\n" +
+      "Protocolo: triple desinfección → remuestreo → confirmar BSA."
+    );
+    updateDashboard();
   }
 
   function fmtVal(v) {
@@ -1940,6 +2101,9 @@
 
   document.getElementById("filterText").addEventListener("input", renderReviewTable);
   document.getElementById("filterEstado").addEventListener("change", renderReviewTable);
+  if (document.getElementById("filterTipo")) {
+    document.getElementById("filterTipo").addEventListener("change", renderReviewTable);
+  }
   document.getElementById("btnRefreshTable").addEventListener("click", () => { updateDashboard(); });
   document.getElementById("btnClearAll").addEventListener("click", () => {
     if (confirm("¿Eliminar TODOS los registros del periodo actual?")) {
@@ -2033,16 +2197,20 @@
     html += "<tr><td><strong>Fecha de recogida</strong></td><td>" + esc(fechaRecogida) + "</td></tr>";
     html += "<tr><td><strong>Fecha informe</strong></td><td>" + esc(fechaInforme) + "</td></tr></table>";
 
+    const programados = state.records.filter(function (r) { return (r.tipoMuestreo || "programado") !== "remuestreo"; });
+    const remuestreos = state.records.filter(function (r) { return r.tipoMuestreo === "remuestreo"; });
+
+    html += "<h3 style='font-size:1rem;margin:0.8rem 0 0.4rem;'>Muestreos programados</h3>";
     html += "<table><thead><tr>";
     html += "<th>Punto de recogida</th><th>Nivel de riesgo</th>";
     html += "<th>Aerobios mesófilos totales<br>ufc/m³</th>";
     html += "<th>Hongos No Patógenos (N.P.)</th><th>Hongos Patógenos</th>";
     html += "</tr></thead><tbody>";
 
-    if (state.records.length === 0) {
-      html += "<tr><td colspan='5' style='text-align:center;color:#888;'>Sin registros para este periodo</td></tr>";
+    if (programados.length === 0) {
+      html += "<tr><td colspan='5' style='text-align:center;color:#888;'>Sin muestreos programados</td></tr>";
     } else {
-      state.records.forEach(r => {
+      programados.forEach(function (r) {
         html += "<tr>";
         html += "<td>" + esc(r.punto) + "</td>";
         html += "<td>" + esc(r.nivelRiesgo) + "</td>";
@@ -2054,10 +2222,35 @@
     }
     html += "</tbody></table>";
 
+    if (remuestreos.length > 0) {
+      html += "<h3 style='font-size:1rem;margin:1rem 0 0.4rem;'>Remuestreos (tras desinfección)</h3>";
+      html += "<table><thead><tr>";
+      html += "<th>Punto</th><th>Fecha</th><th>Motivo</th><th>Aerobios</th><th>Hongos N.P.</th><th>Hongos Pat.</th><th>Resultado</th>";
+      html += "</tr></thead><tbody>";
+      remuestreos.forEach(function (r) {
+        var resLabel = r.estado === "validado" ? "Conforme" : (r.estado === "incidencia" ? "No conforme" : "Pendiente");
+        html += "<tr>";
+        html += "<td>" + esc(r.punto) + "</td>";
+        html += "<td>" + esc(formatDateES(r.fechaRecogida)) + "</td>";
+        html += "<td style='font-size:0.85rem'>" + esc(r.motivoRemuestreo || "—") + "</td>";
+        html += "<td><strong>" + esc(fmtVal(r.aerobios)) + "</strong></td>";
+        html += "<td>" + esc(fmtVal(r.hongosNP)) + "</td>";
+        html += "<td>" + esc(fmtVal(r.hongosPat)) + "</td>";
+        html += "<td>" + esc(resLabel) + "</td>";
+        html += "</tr>";
+      });
+      html += "</tbody></table>";
+    }
+
     // Conclusiones automáticas basadas en datos
-    const incidencias = state.records.filter(r => r.estado === "incidencia");
-    const validados = state.records.filter(r => r.estado === "validado");
-    const puntosOK = validados.map(r => r.punto);
+    const incidencias = state.records.filter(function (r) { return r.estado === "incidencia"; });
+    const validados = state.records.filter(function (r) { return r.estado === "validado"; });
+    const puntosOK = validados.filter(function (r) { return (r.tipoMuestreo || "programado") !== "remuestreo"; }).map(function (r) { return r.punto; });
+    const reqRem = state.records.filter(function (r) {
+      return r.requiereRemuestreo && (r.tipoMuestreo || "programado") === "programado";
+    });
+    const remOk = remuestreos.filter(function (r) { return r.estado === "validado"; });
+    const remPend = remuestreos.filter(function (r) { return r.estado === "pendiente" || r.estado === "incidencia"; });
 
     html += "<div class='conclusion'>";
     if (state.records.length === 0) {
@@ -2065,16 +2258,27 @@
     } else if (incidencias.length === 0) {
       html += "<p><strong>Se confirma Bioseguridad ambiental</strong> en los puntos analizados: " +
         esc(puntosOK.join(", ")) + ".</p>";
+      if (remOk.length) {
+        html += "<p>Remuestreos conformes tras desinfección: " + esc(remOk.map(function (r) { return r.punto; }).join(", ")) + ".</p>";
+      }
     } else {
       html += "<p><strong>Se detectan incidencias</strong> en: " +
-        esc(incidencias.map(r => r.punto).join(", ")) +
+        esc(incidencias.map(function (r) { return r.punto + (r.tipoMuestreo === "remuestreo" ? " (remuestreo)" : ""); }).join(", ")) +
         ". Los puntos sin incidencia confirman bioseguridad: " +
         esc(puntosOK.join(", ") || "ninguno") + ".</p>";
-      incidencias.forEach(r => {
+      incidencias.forEach(function (r) {
         if (r._issues && r._issues.length) {
-          html += "<p style='font-size:0.9rem;'>• " + esc(r.punto) + ": " + esc(r._issues.join("; ")) + "</p>";
+          html += "<p style='font-size:0.9rem;'>• " + esc(r.punto) + ": " + esc(r._issues.join("; ")) +
+            (r.requiereRemuestreo ? " → <strong>requiere desinfección y remuestreo</strong>" : "") + "</p>";
         }
       });
+    }
+    if (reqRem.length || remPend.length) {
+      html += "<p style='margin-top:0.6rem;'><strong>Remuestreos:</strong> ";
+      if (reqRem.length) html += reqRem.length + " muestreo(s) programado(s) con obligación de remuestreo. ";
+      if (remPend.length) html += remPend.length + " remuestreo(s) pendiente(s) o no conformes. ";
+      if (remOk.length) html += remOk.length + " remuestreo(s) conforme(s).";
+      html += "</p>";
     }
     html += "</div>";
 
@@ -2088,12 +2292,13 @@
 
     // Criterios del algoritmo
     html += "<div class='anexo'>";
-    html += "<h2>Criterios de interpretación (algoritmo Hospital de Jarrio)</h2>";
-    html += "<table style='font-size:0.85rem;'><thead><tr><th>Área</th><th>Riesgo</th><th>Mesófilos</th><th>Mohos y levaduras</th><th>Patógenos</th></tr></thead><tbody>";
-    html += "<tr><td>Quirófanos implantes Q1</td><td>R4 Alto</td><td>&lt;10</td><td>Ausencia</td><td>Ausencia</td></tr>";
-    html += "<tr><td>Quirófanos Q2/Q3 · Esterilización proceso</td><td>R3 Medio</td><td>&lt;150</td><td>Ausencia</td><td>Ausencia</td></tr>";
-    html += "<tr><td>Endoscopias · REA Box 1-2 · Control</td><td>R2 Moderado</td><td>&lt;200</td><td>&lt;10</td><td>Ausencia</td></tr>";
-    html += "<tr><td>Esterilización zona almacenaje</td><td>R1 Ligero</td><td>&lt;200</td><td>&lt;25</td><td>Ausencia</td></tr>";
+    html += "<h2>Criterios de interpretación (algoritmo Hospital de Jarrio · UNE 171340)</h2>";
+    html += "<table style='font-size:0.85rem;'><thead><tr><th>Área (ejemplos)</th><th>Riesgo</th><th>Mesófilos</th><th>Mohos y levaduras</th><th>Patógenos</th></tr></thead><tbody>";
+    html += "<tr><td>Quirófano flujo unidireccional</td><td>R5 Muy alto</td><td>&lt;5</td><td>Ausencia</td><td>Ausencia</td></tr>";
+    html += "<tr><td>Quirófanos implantes / alto riesgo</td><td>R4 Alto</td><td>&lt;10</td><td>Ausencia</td><td>Ausencia</td></tr>";
+    html += "<tr><td>Quirófanos convencionales · Esterilización proceso · Paritorios · Aislamientos</td><td>R3 Medio</td><td>&lt;150</td><td>Ausencia</td><td>Ausencia</td></tr>";
+    html += "<tr><td>Endoscopias · UCI/REA · Pre-postoperatorio · Pasillos limpios</td><td>R2 Moderado</td><td>&lt;200</td><td>&lt;10</td><td>Ausencia</td></tr>";
+    html += "<tr><td>Esterilización sucio · Boxes urgencias · Diálisis · Farmacotecnia</td><td>R1 Ligero</td><td>&lt;200</td><td>&lt;25</td><td>Ausencia</td></tr>";
     html += "</tbody></table>";
     html += "<p style='font-size:0.85rem;margin-top:0.5rem;'>Si se cumplen → <strong>Se cumplen criterios de Bioseguridad Ambiental</strong> → Mantener medidas preventivas.<br>";
     html += "Si no se cumplen → <strong>NO se cumplen criterios</strong> → Activar plan de limpieza y desinfección (ver Anexo 2).</p>";
@@ -2501,77 +2706,92 @@
 
   document.getElementById("btnUpdateCharts").addEventListener("click", () => updateCharts());
 
-  // —— Nuevo punto de muestreo ——
+  // —— Nuevo punto de muestreo (Tabla 1 UNE 171340, para cualquier centro) ——
   function initNewPointForm() {
     const areaSel = document.getElementById("newPointArea");
-    if (!areaSel) return;
-    const areas = [...new Set(INSTALLATION_TYPES.map(t => t.area))];
-    areaSel.innerHTML = '<option value="">— Seleccione área —</option>' +
-      areas.map(a => '<option value="' + escAttr(a) + '">' + esc(a) + '</option>').join("");
-    areaSel.addEventListener("change", () => {
+    const tipoSel = document.getElementById("newPointTipo");
+    const btn = document.getElementById("btnAddPoint");
+    if (!areaSel || !tipoSel || !btn) return;
+    if (areaSel.dataset.inited === "1") return;
+    areaSel.dataset.inited = "1";
+
+    const areas = [];
+    INSTALLATION_TYPES.forEach(function (t) {
+      if (areas.indexOf(t.area) < 0) areas.push(t.area);
+    });
+    areaSel.innerHTML = '<option value="">— Seleccione área —</option>';
+    areas.forEach(function (a) {
+      const o = document.createElement("option");
+      o.value = a;
+      o.textContent = a;
+      areaSel.appendChild(o);
+    });
+
+    areaSel.addEventListener("change", function () {
       const area = areaSel.value;
-      const tipoSel = document.getElementById("newPointTipo");
-      const tipos = INSTALLATION_TYPES.filter(t => t.area === area);
+      const tipos = INSTALLATION_TYPES.filter(function (t) { return t.area === area; });
       tipoSel.disabled = !area;
-      tipoSel.innerHTML = '<option value="">— Seleccione tipo —</option>' +
-        tipos.map((t, i) => '<option value="' + i + '" data-area="' + escAttr(area) + '">' + esc(t.tipo) + '</option>').join("");
-      // store full objects by rebuilding options with data
       tipoSel.innerHTML = '<option value="">— Seleccione tipo —</option>';
-      tipos.forEach(t => {
+      tipos.forEach(function (t) {
         const o = document.createElement("option");
         o.value = t.tipo;
         o.textContent = t.tipo;
-        o.dataset.riesgo = t.riesgo;
-        o.dataset.freq = t.frecuencia;
-        o.dataset.meses = t.mesesDefault;
+        o.setAttribute("data-riesgo", t.riesgo);
+        o.setAttribute("data-freq", t.frecuencia);
+        o.setAttribute("data-meses", t.mesesDefault);
         tipoSel.appendChild(o);
       });
       document.getElementById("newPointRiesgo").value = "";
     });
-    document.getElementById("newPointTipo").addEventListener("change", () => {
-      const opt = document.getElementById("newPointTipo").selectedOptions[0];
+
+    tipoSel.addEventListener("change", function () {
+      const opt = tipoSel.options[tipoSel.selectedIndex];
       if (!opt || !opt.value) {
         document.getElementById("newPointRiesgo").value = "";
         return;
       }
-      document.getElementById("newPointRiesgo").value = opt.dataset.riesgo || "";
-      document.getElementById("newPointFreq").value = opt.dataset.freq || "MENSUAL";
-      document.getElementById("newPointMeses").value = opt.dataset.meses || "1,2,3,4,5,6,7,8,9,10,11,12";
+      document.getElementById("newPointRiesgo").value = opt.getAttribute("data-riesgo") || "";
+      document.getElementById("newPointFreq").value = opt.getAttribute("data-freq") || "MENSUAL";
+      document.getElementById("newPointMeses").value = opt.getAttribute("data-meses") || "1,2,3,4,5,6,7,8,9,10,11,12";
+    });
+
+    btn.addEventListener("click", function () {
+      const nombreEl = document.getElementById("newPointNombre");
+      const riesgoEl = document.getElementById("newPointRiesgo");
+      const freqEl = document.getElementById("newPointFreq");
+      const mesesEl = document.getElementById("newPointMeses");
+      const nombre = (nombreEl.value || "").trim();
+      const riesgo = (riesgoEl.value || "").trim();
+      const freq = freqEl.value || "TRIMESTRAL";
+      const mesesStr = mesesEl.value || "";
+      const tipo = tipoSel.value || "";
+      if (!nombre) { alert("Indique el nombre del punto (ej. Quirófano 4, REA Box 3)."); return; }
+      if (!riesgo) { alert("Seleccione primero el área y el tipo de instalación."); return; }
+      var exists = false;
+      for (var i = 0; i < state.points.length; i++) {
+        if (state.points[i].nombre.toLowerCase() === nombre.toLowerCase()) { exists = true; break; }
+      }
+      if (exists) { alert("Ya existe un punto con ese nombre."); return; }
+      var meses = mesesStr.split(",").map(function (x) { return parseInt(x.trim(), 10); }).filter(function (n) { return n >= 1 && n <= 12; });
+      if (!meses.length) meses = [1, 4, 7, 10];
+      state.points.push({
+        id: "P" + Date.now().toString(36).toUpperCase(),
+        nombre: nombre,
+        riesgo: riesgo,
+        frecuencia: freq,
+        meses: meses,
+        nota: tipo
+      });
+      renderPointsTable();
+      log("Nuevo punto añadido: " + nombre + " (" + riesgo + ")");
+      nombreEl.value = "";
+      riesgoEl.value = "";
+      areaSel.value = "";
+      tipoSel.innerHTML = '<option value="">— Primero elija área —</option>';
+      tipoSel.disabled = true;
+      alert("Punto «" + nombre + "» añadido correctamente con riesgo " + riesgo + ".");
     });
   }
-
-  document.getElementById("btnAddPoint").addEventListener("click", () => {
-    const nombre = (document.getElementById("newPointNombre").value || "").trim();
-    const riesgo = document.getElementById("newPointRiesgo").value;
-    const freq = document.getElementById("newPointFreq").value;
-    const mesesStr = document.getElementById("newPointMeses").value;
-    const tipo = document.getElementById("newPointTipo").value;
-    if (!nombre) { alert("Indique el nombre del punto."); return; }
-    if (!riesgo) { alert("Seleccione área y tipo de instalación."); return; }
-    if (state.points.some(p => p.nombre.toLowerCase() === nombre.toLowerCase())) {
-      alert("Ya existe un punto con ese nombre.");
-      return;
-    }
-    const meses = mesesStr.split(",").map(x => parseInt(x.trim(), 10)).filter(n => n >= 1 && n <= 12);
-    const id = "P" + Date.now().toString(36).toUpperCase();
-    state.points.push({
-      id,
-      nombre,
-      riesgo,
-      frecuencia: freq,
-      meses: meses.length ? meses : [1,4,7,10],
-      nota: tipo || ""
-    });
-    renderPointsTable();
-    log("Nuevo punto añadido: " + nombre + " (" + riesgo + ")");
-    document.getElementById("newPointNombre").value = "";
-    document.getElementById("newPointRiesgo").value = "";
-    document.getElementById("newPointArea").value = "";
-    document.getElementById("newPointTipo").innerHTML = '<option value="">— Primero elija área —</option>';
-    document.getElementById("newPointTipo").disabled = true;
-    alert("Punto «" + nombre + "» añadido con riesgo " + riesgo + ".");
-  });
-
 
 })();
   </script>
