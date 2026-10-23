@@ -404,6 +404,27 @@
       .grid-stats { grid-template-columns: 1fr 1fr; }
       #reportPreview { padding: 1rem; }
     }
+    /* Tablet / táctil */
+    @media (pointer: coarse), (max-width: 1024px) {
+      .btn { min-height: 44px; padding: 0.65rem 1.1rem; font-size: 0.95rem; }
+      .btn-sm { min-height: 36px; padding: 0.4rem 0.75rem; }
+      nav.tabs button { padding: 0.95rem 1.15rem; font-size: 0.95rem; }
+      table.data th, table.data td { padding: 0.55rem 0.65rem; }
+      table.data input, table.data select { min-height: 36px; font-size: 0.95rem; }
+      .file-drop { padding: 1.75rem 1rem; min-height: 100px; }
+      input[type="text"], input[type="number"], input[type="date"], input[type="month"], select, textarea {
+        min-height: 42px; font-size: 1rem;
+      }
+    }
+    body.read-only .btn-danger,
+    body.read-only #btnClearAll,
+    body.read-only #btnResetProtocol,
+    body.read-only #btnAddPoint,
+    body.read-only input:not([readonly]):not([type="checkbox"]):not([type="date"]),
+    body.read-only select:not(#filterText):not(#filterEstado):not(#filterTipo):not(#selYear):not(#selMonth) {
+      pointer-events: none; opacity: 0.7;
+    }
+    body.read-only table.data input { pointer-events: none; background: #f4f7f9; }
   </style>
 </head>
 <body>
@@ -540,6 +561,12 @@
         </div>
       </div>
 
+      <!-- Resumen de la última importación -->
+      <div class="card" id="importSummaryCard" style="display:none;">
+        <h2>Resultado de la importación</h2>
+        <div id="importSummaryBody"></div>
+      </div>
+
       <div class="card" id="pasteCard" style="display:none;">
         <h2>Pegar contenido CSV o JSON</h2>
         <textarea id="pasteArea" rows="8" placeholder="punto;nivelRiesgo;aerobios;hongosNP;hongosPat;fechaRecogida&#10;Quirófano 1;Alto. R4;2;No detectado;No detectado;2026-08-25"></textarea>
@@ -648,6 +675,17 @@
           </table>
         </div>
         <p style="margin-top:0.6rem;font-size:0.85rem;color:var(--muted);" id="reviewCount">0 registros</p>
+      </div>
+
+      <div class="card" id="protocolCard">
+        <h2>Protocolo ante fallo de BSA (checklist)</h2>
+        <p style="font-size:0.85rem;color:var(--muted);margin-bottom:0.75rem;">
+          Complete cuando haya incidencias que requieran desinfección y remuestreo. Se incluirá como anexo en el informe.
+        </p>
+        <div id="protocolChecklist"></div>
+        <div class="btn-group" style="margin-top:0.75rem;">
+          <button class="btn btn-secondary btn-sm" id="btnResetProtocol">Reiniciar checklist</button>
+        </div>
       </div>
     </section>
 
@@ -775,6 +813,10 @@
           <div>
             <label>Nombre del centro</label>
             <input type="text" id="cfgHospital" value="Hospital de Jarrio">
+          </div>
+          <div>
+            <label>Área sanitaria</label>
+            <input type="text" id="cfgAreaSanitaria" value="Área Sanitaria I">
           </div>
           <div>
             <label>Responsable</label>
@@ -920,6 +962,7 @@
         </div>
         <div class="btn-group" style="margin-top:1rem;">
           <button class="btn btn-danger" id="btnResetProject">Reiniciar proyecto (borrar todo)</button>
+          <button class="btn btn-secondary" id="btnToggleReadonly" title="Evita ediciones accidentales en reunión o tablet">Modo solo lectura</button>
         </div>
       </div>
 
@@ -1329,9 +1372,24 @@
       thrHongosPat: 0,    // Ausencia siempre
       hospital: "Hospital de Jarrio",
       responsable: "",
-      tipoMuestra: "Aire de ambiente interior"
+      tipoMuestra: "Aire de ambiente interior",
+      areaSanitaria: "Área Sanitaria I",
+      logoPath: "docs/logo_sespa.png"
     },
-    log: []
+    log: [],
+    protocol: [
+      { id: "p1", text: "Calidad notificada / activa plan de limpieza y desinfección", done: false, fecha: "", responsable: "" },
+      { id: "p2", text: "Notificación a Gerencia, Dirección asistencial, Enfermería y Gestión", done: false, fecha: "", responsable: "" },
+      { id: "p3", text: "Coordinadora área quirúrgica / Supervisora UVI-REA informadas", done: false, fecha: "", responsable: "" },
+      { id: "p4", text: "Notificación urgente a Lacera (Tfn: 684613400)", done: false, fecha: "", responsable: "" },
+      { id: "p5", text: "Inicio de triple desinfección (hipoclorito 1:9, intervalos ≥90 min + NDP Air Total+)", done: false, fecha: "", responsable: "" },
+      { id: "p6", text: "Reajuste / suspensión de actividad asistencial (previsión 24-48 h)", done: false, fecha: "", responsable: "" },
+      { id: "p7", text: "Triple desinfección finalizada", done: false, fecha: "", responsable: "" },
+      { id: "p8", text: "Solicitud de remuestreo al laboratorio (Tfn Eurolab: 684612447)", done: false, fecha: "", responsable: "" },
+      { id: "p9", text: "Resultados de remuestreo recibidos y conformes", done: false, fecha: "", responsable: "" }
+    ],
+    prevByPoint: {},
+    prevPeriodId: null
   };
 
   // ========== UTILIDADES ==========
@@ -1573,10 +1631,49 @@
   }
 
   // ========== DASHBOARD ==========
+  // Mapa punto → registro del periodo anterior (para comparativa temporal)
+  state.prevByPoint = state.prevByPoint || {};
+
+  async function loadPreviousPeriodComparison() {
+    try {
+      const all = await idbGetAll();
+      const cur = periodKey();
+      // Periodos anteriores al actual, más reciente primero
+      const prev = all
+        .filter(function (p) { return p.id && p.id < cur; })
+        .sort(function (a, b) { return b.id.localeCompare(a.id); });
+      state.prevByPoint = {};
+      state.prevPeriodId = null;
+      if (prev.length) {
+        state.prevPeriodId = prev[0].id;
+        (prev[0].records || []).forEach(function (r) {
+          if (r.punto && (r.tipoMuestreo || "programado") !== "remuestreo") {
+            state.prevByPoint[r.punto] = r;
+          }
+        });
+      }
+    } catch (e) {
+      state.prevByPoint = {};
+    }
+  }
+
+  function trendHtml(current, prevVal) {
+    if (typeof current !== "number" || typeof prevVal !== "number") return "";
+    const d = current - prevVal;
+    if (d === 0) return ' <span title="Igual que ' + (state.prevPeriodId || "anterior") + '" style="color:var(--muted)">＝</span>';
+    if (d > 0) return ' <span title="+' + d + ' vs ' + (state.prevPeriodId || "anterior") + '" style="color:var(--danger)">↑' + d + '</span>';
+    return ' <span title="' + d + ' vs ' + (state.prevPeriodId || "anterior") + '" style="color:var(--success)">↓' + Math.abs(d) + '</span>';
+  }
+
   function updateDashboard() {
     document.getElementById("statPeriod").textContent = monthName(state.month).substring(0, 3) + " " + state.year;
     document.getElementById("statPoints").textContent = state.records.length;
     document.getElementById("statDocs").textContent = state.documents.length || (state.records.length ? "—" : 0);
+
+    // Cargar comparativa en segundo plano
+    loadPreviousPeriodComparison().then(function () {
+      renderReviewTable();
+    });
 
     let valid = 0, inc = 0, pend = 0;
     state.records.forEach(r => {
@@ -1623,6 +1720,7 @@
     }
 
     renderReviewTable();
+    renderProtocolChecklist();
   }
 
   // ========== IMPORT ==========
@@ -1681,8 +1779,11 @@
 
   async function handleFiles(files) {
     const before = state.records.length;
+    const results = []; // { name, status, punto, aerobios, hongosNP, hongosPat, estado, issues, error }
+
     for (const f of Array.from(files)) {
       const name = f.name;
+      const beforeOne = state.records.length;
       try {
         if (name.toLowerCase().endsWith(".pdf")) {
           const buffer = await f.arrayBuffer();
@@ -1690,15 +1791,18 @@
           log("PDF leído: " + name + " (" + text.length + " caracteres de texto)");
           const n = tryParseLabReport(text, name);
           if (!n) {
-            // fallback: intentar como texto genérico
-            importCSV(text, name);
+            try { importCSV(text, name); } catch (e2) {
+              results.push({ name: name, status: "error", error: "No se extrajeron datos del PDF" });
+              log("ERROR PDF sin datos: " + name);
+              continue;
+            }
           }
-          state.documents.push({ name, date: new Date().toISOString() });
+          state.documents.push({ name: name, date: new Date().toISOString() });
           log("Importado PDF: " + name);
         } else {
-          const text = await new Promise((resolve, reject) => {
+          const text = await new Promise(function (resolve, reject) {
             const reader = new FileReader();
-            reader.onload = ev => resolve(ev.target.result);
+            reader.onload = function (ev) { resolve(ev.target.result); };
             reader.onerror = reject;
             reader.readAsText(f, "UTF-8");
           });
@@ -1707,17 +1811,89 @@
           } else {
             importCSV(text, name);
           }
-          state.documents.push({ name, date: new Date().toISOString() });
+          state.documents.push({ name: name, date: new Date().toISOString() });
           log("Importado: " + name);
+        }
+        // Resumen de registros añadidos por este archivo
+        const added = state.records.slice(beforeOne);
+        if (added.length === 0) {
+          results.push({ name: name, status: "error", error: "Sin registros reconocidos" });
+        } else {
+          added.forEach(function (rec) {
+            results.push({
+              name: name,
+              status: rec.estado === "incidencia" ? "incidencia" : "ok",
+              punto: rec.punto,
+              aerobios: rec.aerobios,
+              hongosNP: rec.hongosNP,
+              hongosPat: rec.hongosPat,
+              estado: rec.estado,
+              issues: rec._issues || [],
+              requiereRemuestreo: !!rec.requiereRemuestreo
+            });
+          });
         }
       } catch (err) {
         log("ERROR al importar " + name + ": " + err.message);
-        alert("Error al procesar " + name + ": " + err.message);
+        results.push({ name: name, status: "error", error: err.message });
       }
     }
     fileInput.value = "";
+    showImportSummary(results);
     updateDashboard();
     checkAndAlertIncidences(before);
+  }
+
+  function showImportSummary(results) {
+    const card = document.getElementById("importSummaryCard");
+    const body = document.getElementById("importSummaryBody");
+    if (!card || !body) return;
+    if (!results || !results.length) {
+      card.style.display = "none";
+      return;
+    }
+    const ok = results.filter(function (r) { return r.status === "ok"; }).length;
+    const inc = results.filter(function (r) { return r.status === "incidencia"; }).length;
+    const err = results.filter(function (r) { return r.status === "error"; }).length;
+    const rem = results.filter(function (r) { return r.requiereRemuestreo; }).length;
+
+    let html = '<div class="grid-stats" style="margin-bottom:1rem;">';
+    html += '<div class="stat ok"><div class="value">' + ok + '</div><div class="label">Válidos</div></div>';
+    html += '<div class="stat' + (inc ? ' danger' : '') + '"><div class="value">' + inc + '</div><div class="label">Incidencias</div></div>';
+    html += '<div class="stat' + (err ? ' warn' : '') + '"><div class="value">' + err + '</div><div class="label">Errores</div></div>';
+    html += '<div class="stat' + (rem ? ' warn' : '') + '"><div class="value">' + rem + '</div><div class="label">Req. remuestreo</div></div>';
+    html += '</div>';
+
+    if (inc > 0) {
+      html += '<div class="alert alert-danger">Hay incidencias de bioseguridad en los datos recién importados. Revise la tabla y, si hay hongos fuera de límite, active desinfección y remuestreo.</div>';
+    } else if (err === 0 && ok > 0) {
+      html += '<div class="alert alert-success">Importación correcta. Todos los registros extraídos cumplen los criterios configurados.</div>';
+    }
+
+    html += '<div style="overflow-x:auto;"><table class="data"><thead><tr>';
+    html += '<th>Archivo</th><th>Punto</th><th>Aerobios</th><th>Hongos N.P.</th><th>Hongos Pat.</th><th>Resultado</th></tr></thead><tbody>';
+    results.forEach(function (r) {
+      var badge = r.status === "ok" ? '<span class="badge badge-ok">OK</span>'
+        : (r.status === "incidencia" ? '<span class="badge badge-danger">Incidencia</span>'
+          : '<span class="badge badge-warn">Error</span>');
+      if (r.requiereRemuestreo) badge += ' <span class="badge badge-warn">Remuestreo</span>';
+      html += '<tr class="' + (r.status === "incidencia" ? "inc" : (r.status === "ok" ? "ok" : "")) + '">';
+      html += '<td style="font-size:0.8rem">' + esc(r.name) + '</td>';
+      html += '<td>' + esc(r.punto || "—") + '</td>';
+      html += '<td>' + esc(fmtVal(r.aerobios)) + '</td>';
+      html += '<td>' + esc(fmtVal(r.hongosNP)) + '</td>';
+      html += '<td>' + esc(fmtVal(r.hongosPat)) + '</td>';
+      html += '<td>' + badge;
+      if (r.error) html += '<br><span style="font-size:0.8rem;color:var(--danger)">' + esc(r.error) + '</span>';
+      if (r.issues && r.issues.length) html += '<br><span style="font-size:0.75rem;color:var(--muted)">' + esc(r.issues.join("; ")) + '</span>';
+      html += '</td></tr>';
+    });
+    html += '</tbody></table></div>';
+    html += '<p style="margin-top:0.6rem;font-size:0.85rem;color:var(--muted)">Solo se listan los datos de esta importación. El conjunto completo está en la pestaña Revisión.</p>';
+
+    body.innerHTML = html;
+    card.style.display = "block";
+    card.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
   /** Intenta extraer un registro del formato de informe individual de laboratorio (texto copiado del PDF) */
@@ -1956,6 +2132,41 @@
     }
   });
 
+  // ========== PROTOCOLO CHECKLIST ==========
+  function renderProtocolChecklist() {
+    const box = document.getElementById("protocolChecklist");
+    if (!box || !state.protocol) return;
+    let html = '<table class="data" style="font-size:0.88rem"><thead><tr><th style="width:2rem"></th><th>Paso</th><th>Fecha</th><th>Responsable</th></tr></thead><tbody>';
+    state.protocol.forEach(function (step, i) {
+      html += '<tr>';
+      html += '<td><input type="checkbox" data-pi="' + i + '" class="proto-check"' + (step.done ? ' checked' : '') + '></td>';
+      html += '<td>' + esc(step.text) + '</td>';
+      html += '<td><input type="date" data-pi="' + i + '" data-pf="fecha" value="' + escAttr(step.fecha || '') + '" style="min-width:8rem"></td>';
+      html += '<td><input type="text" data-pi="' + i + '" data-pf="responsable" value="' + escAttr(step.responsable || '') + '" placeholder="Nombre"></td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    box.innerHTML = html;
+    box.querySelectorAll(".proto-check").forEach(function (cb) {
+      cb.addEventListener("change", function () {
+        const i = parseInt(cb.dataset.pi, 10);
+        state.protocol[i].done = cb.checked;
+        if (cb.checked && !state.protocol[i].fecha) {
+          const d = new Date();
+          state.protocol[i].fecha = d.toISOString().slice(0, 10);
+          renderProtocolChecklist();
+        }
+        log("Protocolo: " + (cb.checked ? "✓" : "○") + " " + state.protocol[i].text.substring(0, 40));
+      });
+    });
+    box.querySelectorAll("input[data-pf]").forEach(function (inp) {
+      inp.addEventListener("change", function () {
+        const i = parseInt(inp.dataset.pi, 10);
+        state.protocol[i][inp.dataset.pf] = inp.value;
+      });
+    });
+  }
+
   // ========== REVIEW TABLE ==========
   function renderReviewTable() {
     const tbody = document.getElementById("reviewBody");
@@ -1997,7 +2208,15 @@
         "<td>" + esc(rec.punto) + (rec.motivoRemuestreo ? "<br><span style='font-size:0.75rem;color:var(--muted)'>" + esc(rec.motivoRemuestreo) + "</span>" : "") + "</td>" +
         "<td>" + esc(rec.nivelRiesgo) + "</td>" +
         "<td>" + esc(rec.fechaRecogida) + "</td>" +
-        "<td><input type='text' data-idx='" + idx + "' data-field='aerobios' value='" + escAttr(fmtVal(rec.aerobios)) + "'></td>" +
+        "<td><input type='text' data-idx='" + idx + "' data-field='aerobios' value='" + escAttr(fmtVal(rec.aerobios)) + "' style='max-width:4.5rem'>" +
+          (function () {
+            var prev = state.prevByPoint && state.prevByPoint[rec.punto];
+            if (!prev || typeof rec.aerobios !== "number") return "";
+            var pv = typeof prev.aerobios === "number" ? prev.aerobios : null;
+            if (pv === null) return "";
+            return "<br><span style='font-size:0.75rem;color:var(--muted)'>ant. " + pv + "</span>" + trendHtml(rec.aerobios, pv);
+          })() +
+        "</td>" +
         "<td><input type='text' data-idx='" + idx + "' data-field='hongosNP' value='" + escAttr(fmtVal(rec.hongosNP)) + "'></td>" +
         "<td><input type='text' data-idx='" + idx + "' data-field='hongosPat' value='" + escAttr(fmtVal(rec.hongosPat)) + "'></td>" +
         "<td><span class='badge " + badgeClass + "'>" + esc(rec.estado) + "</span>" +
@@ -2105,6 +2324,14 @@
     document.getElementById("filterTipo").addEventListener("change", renderReviewTable);
   }
   document.getElementById("btnRefreshTable").addEventListener("click", () => { updateDashboard(); });
+  if (document.getElementById("btnResetProtocol")) {
+    document.getElementById("btnResetProtocol").addEventListener("click", function () {
+      if (!confirm("¿Reiniciar el checklist del protocolo?")) return;
+      state.protocol.forEach(function (s) { s.done = false; s.fecha = ""; s.responsable = ""; });
+      renderProtocolChecklist();
+      log("Checklist de protocolo reiniciado");
+    });
+  }
   document.getElementById("btnClearAll").addEventListener("click", () => {
     if (confirm("¿Eliminar TODOS los registros del periodo actual?")) {
       state.records = [];
@@ -2147,6 +2374,9 @@
     state.config.thrHongosR1 = parseFloat(document.getElementById("thrHongosR1").value) || 25;
     state.config.thrHongosPat = 0;
     state.config.hospital = document.getElementById("cfgHospital").value || "Hospital de Jarrio";
+    if (document.getElementById("cfgAreaSanitaria")) {
+      state.config.areaSanitaria = document.getElementById("cfgAreaSanitaria").value || "";
+    }
     state.config.responsable = document.getElementById("cfgResponsable").value || "";
     state.config.tipoMuestra = document.getElementById("cfgTipoMuestra").value || "Aire de ambiente interior";
     state.records.forEach(evaluateRecord);
@@ -2186,11 +2416,23 @@
 
     let html = "";
     const responsable = state.config.responsable || "";
-    html += "<h1>RESULTADOS DEFINITIVOS de análisis microbiológico de seguridad ambiental.</h1>";
-    html += "<p class='subtitle'>Informe " + fechaInforme + "</p>";
-    html += "<p style='text-align:center;font-weight:600;'>" + esc(hospital) + "</p>";
-    if (responsable) html += "<p style='text-align:center;font-size:0.9rem;'>Responsable: " + esc(responsable) + "</p>";
-    html += "<p style='text-align:center;margin-bottom:1.2rem;'>Muestreo " + periodoTxt + "</p>";
+    const areaSan = state.config.areaSanitaria || "";
+    const logoPath = state.config.logoPath || "docs/logo_sespa.png";
+
+    // Cabecera institucional
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem;border-bottom:2px solid #0d4f6b;padding-bottom:0.75rem;">';
+    html += '<div style="flex:1">';
+    html += '<div style="font-size:0.75rem;color:#5a6f7a;text-transform:uppercase;letter-spacing:0.04em;">Servicio de Salud del Principado de Asturias</div>';
+    if (areaSan) html += '<div style="font-size:0.85rem;font-weight:600;color:#0d4f6b;">' + esc(areaSan) + '</div>';
+    html += '<div style="font-size:1.05rem;font-weight:700;margin-top:0.2rem;">' + esc(hospital) + '</div>';
+    if (responsable) html += '<div style="font-size:0.85rem;margin-top:0.15rem;">Responsable: ' + esc(responsable) + '</div>';
+    html += '</div>';
+    html += '<div style="text-align:right;min-width:90px;">';
+    html += '<img src="' + escAttr(logoPath) + '" alt="SESPA" style="max-height:56px;max-width:120px;" onerror="this.style.display=\'none\'">';
+    html += '</div></div>';
+
+    html += "<h1 style='text-align:center;'>RESULTADOS DEFINITIVOS de análisis microbiológico de seguridad ambiental</h1>";
+    html += "<p class='subtitle'>Informe " + fechaInforme + " · Muestreo " + periodoTxt + "</p>";
 
     html += "<h2>Resultados</h2>";
     html += "<table class='meta-table'><tr><td><strong>Tipo de muestra</strong></td><td>" + esc(tipo) + "</td></tr>";
@@ -2324,6 +2566,21 @@
     html += "(superficies horizontales y verticales), incluyendo dispositivos médicos y fungibles. Intervalos mínimos de 90 minutos entre las 3. ";
     html += "Limpieza de rejillas por inmersión y pulverización del tramo de conducto accesible. Finalizar con NDP Air Total+ GLP CE. ";
     html += "Los intervalos pueden incrementarse según circunstancias (ej. existencia de polvo).</p>";
+
+    // Checklist cumplimentado (si hay pasos marcados)
+    if (state.protocol && state.protocol.some(function (s) { return s.done; })) {
+      html += "<h3 style='font-size:0.95rem;margin-top:1rem;'>Seguimiento del protocolo en este periodo</h3>";
+      html += "<table style='font-size:0.82rem;'><thead><tr><th>Paso</th><th>Hecho</th><th>Fecha</th><th>Responsable</th></tr></thead><tbody>";
+      state.protocol.forEach(function (s) {
+        html += "<tr><td>" + esc(s.text) + "</td><td>" + (s.done ? "Sí" : "No") + "</td><td>" +
+          esc(s.fecha ? formatDateES(s.fecha) : "—") + "</td><td>" + esc(s.responsable || "—") + "</td></tr>";
+      });
+      html += "</tbody></table>";
+    }
+
+    html += "<h2>Anexo 3: Flujograma de bioseguridad ambiental</h2>";
+    html += "<p style='font-size:0.85rem;'>Diagrama de decisión según nivel de riesgo y actuación ante incumplimiento.</p>";
+    html += '<p style="text-align:center;"><img src="docs/flujograma_bsa.png" alt="Flujograma BSA" style="max-width:100%;height:auto;border:1px solid #ccc;" onerror="this.parentNode.innerHTML=\'<em>Coloque docs/flujograma_bsa.png junto a la aplicación para ver el diagrama.</em>\'"></p>';
     html += "</div>";
 
     // Pie de trazabilidad
@@ -2396,6 +2653,7 @@
       documents: state.documents,
       points: state.points,
       config: state.config,
+      protocol: state.protocol,
       saved: new Date().toISOString()
     };
     try {
@@ -2416,6 +2674,7 @@
       documents: state.documents,
       points: state.points,
       config: state.config,
+      protocol: state.protocol,
       saved: new Date().toISOString()
     };
     downloadBlob(JSON.stringify(payload, null, 2), "BSA_proyecto_" + periodKey() + ".json", "application/json");
@@ -2442,6 +2701,15 @@
     reader.readAsText(f);
     document.getElementById("projectFileInput").value = "";
   });
+
+  if (document.getElementById("btnToggleReadonly")) {
+    document.getElementById("btnToggleReadonly").addEventListener("click", function () {
+      document.body.classList.toggle("read-only");
+      const on = document.body.classList.contains("read-only");
+      this.textContent = on ? "Salir de solo lectura" : "Modo solo lectura";
+      log(on ? "Modo solo lectura activado" : "Modo solo lectura desactivado");
+    });
+  }
 
   document.getElementById("btnResetProject").addEventListener("click", () => {
     if (!confirm("¿Borrar todos los datos y reiniciar la aplicación?")) return;
@@ -2470,6 +2738,7 @@
     if (data.documents) state.documents = data.documents;
     if (data.points) state.points = data.points;
     if (data.config) Object.assign(state.config, data.config);
+    if (data.protocol && Array.isArray(data.protocol)) state.protocol = data.protocol;
     document.getElementById("selYear").value = state.year;
     document.getElementById("selMonth").value = state.month;
     document.getElementById("thrR4").value = state.config.thrR4;
@@ -2484,6 +2753,7 @@
     }
     document.getElementById("thrHongosPat").value = state.config.thrHongosPat;
     document.getElementById("cfgHospital").value = state.config.hospital;
+    if (document.getElementById("cfgAreaSanitaria")) document.getElementById("cfgAreaSanitaria").value = state.config.areaSanitaria || "";
     if (document.getElementById("cfgResponsable")) document.getElementById("cfgResponsable").value = state.config.responsable || "";
     updateHeaderMeta();
     document.getElementById("cfgTipoMuestra").value = state.config.tipoMuestra;
