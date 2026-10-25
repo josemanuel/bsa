@@ -572,8 +572,13 @@
       </div>
     </div>
 
-    <a class="nav-btn" id="btnHelp" href="ayuda.html" target="_blank" rel="noopener">Ayuda</a>
-    <button type="button" class="nav-btn" id="btnAbout" data-modal="about">Acerca de</button>
+    <div class="nav-item" data-menu="informacion">
+      <button type="button" class="nav-btn" data-dropdown="informacion">Información <span class="caret">▾</span></button>
+      <div class="dropdown">
+        <a href="ayuda.html" target="_blank" rel="noopener">Manual de usuario (Ayuda)</a>
+        <button type="button" id="btnAbout" data-modal="about">Acerca de</button>
+      </div>
+    </div>
   </nav>
 
   <main>
@@ -1480,8 +1485,8 @@
     { id: "Q2", nombre: "Quirófano 2", riesgo: "Medio. R3", frecuencia: "MENSUAL", meses: [1,2,3,4,5,6,7,8,9,10,11,12], nota: "No implantes" },
     { id: "Q3", nombre: "Quirófano 3", riesgo: "Medio. R3", frecuencia: "MENSUAL", meses: [1,2,3,4,5,6,7,8,9,10,11,12], nota: "No implantes" },
     { id: "END", nombre: "Endoscopias", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", meses: [1,4,7,10], nota: "" },
-    { id: "EST_EST", nombre: "Esterilización Área Estéril (Proceso y empaquetado)", riesgo: "Medio. R3", frecuencia: "TRIMESTRAL", meses: [1,4,7,10], nota: "Proceso y empaquetado" },
-    { id: "EST_LIM", nombre: "Esterilización Sala Limpio (Zona de almacenaje)", riesgo: "Ligero. R1", frecuencia: "TRIMESTRAL", meses: [1,4,7,10], nota: "Zona de almacenaje" },
+    { id: "EST_EST", nombre: "Esterilización Área Estéril", riesgo: "Medio. R3", frecuencia: "TRIMESTRAL", meses: [1,4,7,10], nota: "Proceso y empaquetado · R3" },
+    { id: "EST_LIM", nombre: "Esterilización Sala Limpio", riesgo: "Ligero. R1", frecuencia: "TRIMESTRAL", meses: [1,4,7,10], nota: "Zona de almacenaje · R1" },
     { id: "REA_C", nombre: "REA Box Control", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", meses: [2,5,8,11], nota: "" },
     { id: "REA_1", nombre: "REA Box 1", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", meses: [2,5,8,11], nota: "" },
     { id: "REA_2", nombre: "REA Box 2", riesgo: "Moderado. R2", frecuencia: "TRIMESTRAL", meses: [2,5,8,11], nota: "" }
@@ -2478,8 +2483,18 @@
     if (/rea\s*box\s*1\b/i.test(s) || /rea\s*1\b/i.test(s)) return "REA Box 1";
     if (/rea\s*box\s*2\b/i.test(s) || /rea\s*2\b/i.test(s)) return "REA Box 2";
     if (/endoscop/i.test(s)) return "Endoscopias";
-    if (/esteriliz.*est[eé]ril|proceso\s*y\s*empaquet/i.test(s)) return "Esterilización Área Estéril (Proceso y empaquetado)";
-    if (/esteriliz.*limp|almacenaje|almac[eé]n/i.test(s)) return "Esterilización Sala Limpio (Zona de almacenaje)";
+    // Esterilización: SIEMPRE dos puntos distintos (R3 Área Estéril · R1 Sala Limpio)
+    if (/esteriliz/i.test(s)) {
+      if (/sala\s*limp|zona\s*(de\s*)?almacen|almac[eé]n|sucio/i.test(s)) {
+        return "Esterilización Sala Limpio";
+      }
+      if (/[aá]rea\s*est[eé]ril|proceso|empaquet/i.test(s)) {
+        return "Esterilización Área Estéril";
+      }
+      // Si solo dice "Esterilización" sin matizar, no unificar: dejar texto para revisión manual
+      if (/est[eé]ril/i.test(s) && !/limp/i.test(s)) return "Esterilización Área Estéril";
+      if (/limp/i.test(s)) return "Esterilización Sala Limpio";
+    }
     return s;
   }
 
@@ -2487,16 +2502,38 @@
   function puntoFromFilename(origen) {
     if (!origen) return "";
     var name = String(origen);
-    // Patrones típicos: "... Quirófano 1 - Hospital ..." / "... REA Box 1 - ..." / "... REA Control - ..."
     var m = name.match(/quir[oó]fano\s*(\d+)/i);
     if (m) return "Quirófano " + m[1];
     if (/rea\s*(box\s*)?control/i.test(name)) return "REA Box Control";
     m = name.match(/rea\s*box\s*(\d+)/i);
     if (m) return "REA Box " + m[1];
     if (/endoscop/i.test(name)) return "Endoscopias";
-    if (/esteriliz/i.test(name) && /est[eé]ril|proceso/i.test(name)) return "Esterilización Área Estéril (Proceso y empaquetado)";
-    if (/esteriliz/i.test(name) && /limp|almacen/i.test(name)) return "Esterilización Sala Limpio (Zona de almacenaje)";
+    if (/esteriliz/i.test(name)) {
+      if (/sala\s*limp|almacen|sucio/i.test(name)) return "Esterilización Sala Limpio";
+      if (/[aá]rea\s*est[eé]ril|proceso|empaquet|est[eé]ril/i.test(name)) return "Esterilización Área Estéril";
+    }
     return "";
+  }
+
+  /** Orden canónico de puntos (config del centro) para tablas e informes */
+  function pointOrderIndex(nombre) {
+    var list = state.points || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].nombre === nombre) return i;
+      // aliases legacy
+      if (nombre && list[i].nombre.indexOf(nombre) === 0) return i;
+      if (nombre && nombre.indexOf(list[i].nombre) === 0) return i;
+    }
+    return 900 + String(nombre || "").charCodeAt(0);
+  }
+  function sortRecordsByPointOrder(recs) {
+    return (recs || []).slice().sort(function (a, b) {
+      var d = pointOrderIndex(a.punto) - pointOrderIndex(b.punto);
+      if (d !== 0) return d;
+      var ta = (a.tipoMuestreo || "programado") === "remuestreo" ? 1 : 0;
+      var tb = (b.tipoMuestreo || "programado") === "remuestreo" ? 1 : 0;
+      return ta - tb;
+    });
   }
 
   /** Inserta o sustituye registro del mismo punto + periodo (evita duplicados) */
