@@ -412,6 +412,16 @@
       table.data th, table.data td { padding: 0.55rem 0.65rem; }
       table.data input, table.data select { min-height: 36px; font-size: 0.95rem; }
       .file-drop { padding: 1.75rem 1rem; min-height: 100px; }
+    .import-zones {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.85rem;
+      margin: 0.75rem 0;
+    }
+    @media (max-width: 700px) { .import-zones { grid-template-columns: 1fr; } }
+    .zone-prog { border-color: #0d4f6b; background: #f0f7fb; }
+    .zone-rem { border-color: #b45309; background: #fff8f0; }
+    .zone-rem.dragover, .zone-prog.dragover { outline: 2px solid var(--primary); }
       input[type="text"], input[type="number"], input[type="date"], input[type="month"], select, textarea {
         min-height: 42px; font-size: 1rem;
       }
@@ -647,16 +657,23 @@
       <div class="card">
         <h2>Importar datos</h2>
         <div class="alert alert-info">
-          <strong>Formatos nativos:</strong> CSV y JSON (procesamiento 100 % local).<br>
-          <strong>Importación de PDF:</strong> arrastre o seleccione los informes PDF del laboratorio (uno por punto de muestreo). 
-          La aplicación extrae automáticamente Denominación, Aerobios mesófilos, Hongos N.P., Hongos Patógenos, fecha y nº de informe.<br>
-          También admite CSV/JSON, pegado de texto, entrada manual o la <strong>demo de agosto 2026</strong>.
+          Use la zona correspondiente: <strong>muestreos programados</strong> (calendario mensual/trimestral) o
+          <strong>remuestreos</strong> (tras desinfección por incumplimiento). Los PDF se procesan en local.
         </div>
 
-        <div class="file-drop" id="fileDrop">
-          <p><strong>Arrastre archivos aquí</strong> o haga clic para seleccionar</p>
-          <p style="font-size:0.85rem;color:var(--muted);margin-top:0.4rem;">PDF · CSV · JSON · procesamiento local</p>
-          <input type="file" id="fileInput" accept=".pdf,.csv,.json,.txt" multiple style="display:none;">
+        <div class="import-zones">
+          <div class="file-drop zone-prog" id="fileDropProg">
+            <p><strong>Muestreos programados</strong></p>
+            <p style="font-size:0.85rem;color:var(--muted);margin-top:0.35rem;">Arrastre aquí los informes del muestreo de rutina (calendario)</p>
+            <p style="font-size:0.8rem;color:var(--muted);">PDF · CSV · JSON</p>
+            <input type="file" id="fileInputProg" accept=".pdf,.csv,.json,.txt" multiple style="display:none;">
+          </div>
+          <div class="file-drop zone-rem" id="fileDropRem">
+            <p><strong>Remuestreos</strong></p>
+            <p style="font-size:0.85rem;color:var(--muted);margin-top:0.35rem;">Arrastre aquí los informes tras desinfección</p>
+            <p style="font-size:0.8rem;color:var(--muted);">Se vincularán al muestreo con incidencia</p>
+            <input type="file" id="fileInputRem" accept=".pdf,.csv,.json,.txt" multiple style="display:none;">
+          </div>
         </div>
         <ul class="file-list" id="fileList"></ul>
 
@@ -752,6 +769,10 @@
             <option value="">Programados y remuestreos</option>
             <option value="programado">Solo programados</option>
             <option value="remuestreo">Solo remuestreos</option>
+          </select>
+          <select id="filterPeriodo" style="max-width:180px;" title="Filtrar por mes">
+            <option value="actual">Solo periodo activo</option>
+            <option value="todos">Todos los periodos</option>
           </select>
           <button class="btn btn-sm btn-secondary" id="btnRefreshTable">Actualizar</button>
           <div class="spacer"></div>
@@ -2133,18 +2154,98 @@
   }
 
   // ========== IMPORT ==========
-  const fileDrop = document.getElementById("fileDrop");
-  const fileInput = document.getElementById("fileInput");
+  function wireDropZone(dropId, inputId, tipo) {
+    var drop = document.getElementById(dropId);
+    var input = document.getElementById(inputId);
+    if (!drop || !input) return;
+    drop.addEventListener("click", function () { input.click(); });
+    drop.addEventListener("dragover", function (e) { e.preventDefault(); drop.classList.add("dragover"); });
+    drop.addEventListener("dragleave", function () { drop.classList.remove("dragover"); });
+    drop.addEventListener("drop", function (e) {
+      e.preventDefault();
+      drop.classList.remove("dragover");
+      handleFiles(e.dataTransfer.files, tipo);
+    });
+    input.addEventListener("change", function () {
+      handleFiles(input.files, tipo);
+      input.value = "";
+    });
+  }
+  wireDropZone("fileDropProg", "fileInputProg", "programado");
+  wireDropZone("fileDropRem", "fileInputRem", "remuestreo");
 
-  fileDrop.addEventListener("click", () => fileInput.click());
-  fileDrop.addEventListener("dragover", e => { e.preventDefault(); fileDrop.classList.add("dragover"); });
-  fileDrop.addEventListener("dragleave", () => fileDrop.classList.remove("dragover"));
-  fileDrop.addEventListener("drop", e => {
-    e.preventDefault();
-    fileDrop.classList.remove("dragover");
-    handleFiles(e.dataTransfer.files);
-  });
-  fileInput.addEventListener("change", () => handleFiles(fileInput.files));
+  /** Lista candidatos de muestreo programado con incidencia (para vincular remuestreo) */
+  function listIncidenciaCandidates(puntoPreferido) {
+    state.records.forEach(ensureRecordPeriodo);
+    var list = state.records.filter(function (r) {
+      return (r.tipoMuestreo || "programado") === "programado" &&
+        (r.estado === "incidencia" || r.requiereRemuestreo);
+    });
+    if (puntoPreferido) {
+      list.sort(function (a, b) {
+        var ap = a.punto === puntoPreferido ? 0 : 1;
+        var bp = b.punto === puntoPreferido ? 0 : 1;
+        if (ap !== bp) return ap - bp;
+        return String(b.fechaRecogida || "").localeCompare(String(a.fechaRecogida || ""));
+      });
+    } else {
+      list.sort(function (a, b) {
+        return String(b.fechaRecogida || "").localeCompare(String(a.fechaRecogida || ""));
+      });
+    }
+    return list;
+  }
+
+  /**
+   * Pregunta a qué muestreo programado corresponde un remuestreo.
+   * Devuelve { periodoIncidencia, punto, motivo } o null si cancela.
+   */
+  function askRemuestreoLink(puntoDetectado, fechaRem) {
+    var cands = listIncidenciaCandidates(puntoDetectado);
+    if (!cands.length) {
+      // Sin incidencias en memoria: pedir periodo manual
+      var sug = periodKey();
+      var ans = prompt(
+        "REMUESTREO de «" + (puntoDetectado || "?") + "» (recogida " + (fechaRem || "?") + ")\n\n" +
+        "No hay muestreos con incidencia en memoria.\n" +
+        "Indique el periodo del muestreo fallido (AAAA-MM), p. ej. el mes anterior:",
+        sug
+      );
+      if (!ans) return null;
+      return {
+        periodoIncidencia: ans.trim(),
+        punto: puntoDetectado || "",
+        motivo: "Remuestreo tras desinfección"
+      };
+    }
+    var lines = cands.map(function (c, i) {
+      return (i + 1) + ") " + c.punto + " · " + (c.periodo || "") + " · recogida " + (c.fechaRecogida || "") +
+        (c._issues && c._issues.length ? " · " + c._issues[0] : "");
+    });
+    var def = 1;
+    // Preferir mismo punto y periodo más cercano anterior a fechaRem
+    for (var i = 0; i < cands.length; i++) {
+      if (puntoDetectado && cands[i].punto === puntoDetectado) { def = i + 1; break; }
+    }
+    var pick = prompt(
+      "REMUESTREO detectado («" + (puntoDetectado || "?") + "», recogida " + (fechaRem || "?") + ")\n\n" +
+      "¿A qué muestreo programado corresponde?\n\n" + lines.join("\n") +
+      "\n\nEscriba el número (1–" + cands.length + "):",
+      String(def)
+    );
+    if (pick === null) return null;
+    var idx = parseInt(pick, 10) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= cands.length) {
+      alert("Selección no válida.");
+      return null;
+    }
+    var chosen = cands[idx];
+    return {
+      periodoIncidencia: chosen.periodo || periodKey(),
+      punto: chosen.punto,
+      motivo: chosen.motivoRemuestreoSugerido || (chosen._issues && chosen._issues.join("; ")) || "Tras incumplimiento"
+    };
+  }
 
   // Configurar worker de PDF.js (local)
   if (typeof pdfjsLib !== "undefined") {
@@ -2186,9 +2287,11 @@
     }
   }
 
-  async function handleFiles(files) {
+  async function handleFiles(files, tipoForzado) {
     const before = state.records.length;
     const results = []; // { name, status, punto, aerobios, hongosNP, hongosPat, estado, issues, error }
+    tipoForzado = tipoForzado || "programado";
+    log("Importación como " + (tipoForzado === "remuestreo" ? "REMUESTREO" : "muestreo PROGRAMADO"));
 
     for (const f of Array.from(files)) {
       const name = f.name;
@@ -2198,16 +2301,16 @@
           const buffer = await f.arrayBuffer();
           const text = await extractTextFromPDF(buffer);
           log("PDF leído: " + name + " (" + text.length + " caracteres de texto)");
-          const n = tryParseLabReport(text, name);
+          const n = tryParseLabReport(text, name, { tipoForzado: tipoForzado });
           if (!n) {
-            try { importCSV(text, name); } catch (e2) {
+            try { importCSV(text, name, tipoForzado); } catch (e2) {
               results.push({ name: name, status: "error", error: "No se extrajeron datos del PDF" });
               log("ERROR PDF sin datos: " + name);
               continue;
             }
           }
-          state.documents.push({ name: name, date: new Date().toISOString() });
-          log("Importado PDF: " + name);
+          state.documents.push({ name: name, date: new Date().toISOString(), tipo: tipoForzado });
+          log("Importado PDF (" + tipoForzado + "): " + name);
         } else {
           const text = await new Promise(function (resolve, reject) {
             const reader = new FileReader();
@@ -2252,7 +2355,6 @@
         results.push({ name: name, status: "error", error: err.message });
       }
     }
-    fileInput.value = "";
     // Registros añadidos/actualizados en esta importación
     var newRecs = state.records.slice(Math.max(0, before));
     // Reconstruir lista de los que acaban de importarse por documentoOrigen reciente
@@ -2461,7 +2563,8 @@
   }
 
   /** Intenta extraer un registro del formato de informe individual de laboratorio (PDF) */
-  function tryParseLabReport(text, origen) {
+  function tryParseLabReport(text, origen, opts) {
+    opts = opts || {};
     const t = normalizePdfExtraction(text);
     // Detectar si parece un informe de laboratorio de aire
     if (!/INFORME/i.test(t) && !/Aerobios\s*mes/i.test(t) && !/Denominaci/i.test(t)) {
@@ -2539,21 +2642,35 @@
     var mInf = t.match(/INFORME\s*(?:N[º°o]|No|#)?\s*:?\s*(\d+\w*)/i);
     if (mInf) informeNro = mInf[1];
 
-    // Tipo: remuestreo solo si el archivo o texto lo indican explícitamente
-    var tipoMuestreo = "programado";
-    if (/remuestreo/i.test(String(origen || "")) || /\bremuestreo\b/i.test(t)) {
-      tipoMuestreo = "remuestreo";
+    // Tipo: zona de carga (forzado) > nombre/texto "remuestreo" > programado
+    var tipoMuestreo = opts.tipoForzado || "programado";
+    if (!opts.tipoForzado) {
+      if (/remuestreo/i.test(String(origen || "")) || /\bremuestreo\b/i.test(t)) {
+        tipoMuestreo = "remuestreo";
+      }
     }
 
     if (!punto && aerobios === null) return null;
     if (!punto) punto = "Desconocido";
 
-    // Validación de fechas / periodo antes de aceptar
     var fechaFinal = "";
     var mFin = t.match(/Fecha\s*final\s*[:\s]*(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{2,4})/i);
     if (mFin) {
       var yf = mFin[3].length === 2 ? "20" + mFin[3] : mFin[3];
       fechaFinal = yf + "-" + String(mFin[2]).padStart(2, "0") + "-" + String(mFin[1]).padStart(2, "0");
+    }
+
+    var fechaRec = fecha || (periodoFile ? periodoFile + "-15" : (state.year + "-" + String(state.month).padStart(2, "0") + "-15"));
+
+    // Remuestreo: vincular al muestreo programado con incidencia
+    var linkRem = null;
+    if (tipoMuestreo === "remuestreo") {
+      linkRem = askRemuestreoLink(punto, fechaRec);
+      if (!linkRem) {
+        log("Remuestreo cancelado por el usuario: " + (origen || ""));
+        return 0;
+      }
+      if (linkRem.punto) punto = linkRem.punto;
     }
 
     const def = findPointDef(punto);
@@ -2563,7 +2680,7 @@
       aerobios: aerobios,
       hongosNP: isAusencia(hongosNP) ? "No detectado" : hongosNP,
       hongosPat: isAusencia(hongosPat) ? "No detectado" : hongosPat,
-      fechaRecogida: fecha || (periodoFile ? periodoFile + "-15" : (state.year + "-" + String(state.month).padStart(2, "0") + "-15")),
+      fechaRecogida: fechaRec,
       documentoOrigen: origen || (informeNro ? "Lab " + informeNro : "Texto laboratorio"),
       informeNro: informeNro,
       observaciones: identNP ? "Identificación: " + identNP : "",
@@ -2571,8 +2688,15 @@
       tipoMuestreo: tipoMuestreo,
       _fechaFinalInforme: fechaFinal || ""
     };
-    // Forzar periodo del archivo si existe (el informe se etiqueta por mes de muestreo)
-    if (periodoFile) {
+
+    if (tipoMuestreo === "remuestreo" && linkRem) {
+      rec.periodoIncidencia = linkRem.periodoIncidencia;
+      rec.periodo = linkRem.periodoIncidencia;
+      rec.motivoRemuestreo = linkRem.motivo;
+      rec.observaciones = (rec.observaciones ? rec.observaciones + " · " : "") +
+        "Remuestreo del periodo " + linkRem.periodoIncidencia;
+      // No forzar periodo del nombre de archivo (p. ej. "Julio") sobre el del incumplimiento
+    } else if (periodoFile) {
       rec._periodoArchivo = periodoFile;
       rec.periodo = periodoFile;
       if (fecha) {
@@ -2583,26 +2707,14 @@
         }
       }
     }
-    // Si es remuestreo y hay incidencia previa del mismo punto, enlazar periodo
-    if (tipoMuestreo === "remuestreo") {
-      var prevInc = state.records.find(function (r) {
-        return r.punto === punto && r.requiereRemuestreo && (r.tipoMuestreo || "programado") === "programado";
-      });
-      if (prevInc) {
-        ensureRecordPeriodo(prevInc);
-        rec.periodoIncidencia = prevInc.periodo;
-        rec.periodo = prevInc.periodo;
-        rec.motivoRemuestreo = rec.motivoRemuestreo || prevInc.motivoRemuestreoSugerido || "Tras incumplimiento";
-      }
-    }
 
     upsertRecord(rec);
     return 1;
   }
 
-  function importCSV(text, origen) {
+  function importCSV(text, origen, tipoForzado) {
     // Primero intentar formato de laboratorio (texto de PDF)
-    const nEuro = tryParseLabReport(text, origen);
+    const nEuro = tryParseLabReport(text, origen, { tipoForzado: tipoForzado || "programado" });
     if (nEuro) {
       log("Laboratorio: 1 registro extraído desde " + (origen || "texto"));
       return;
@@ -2821,11 +2933,12 @@
     let shown = 0;
     let pendRem = 0;
     var pk = periodKey();
+    var periodoMode = (document.getElementById("filterPeriodo") && document.getElementById("filterPeriodo").value) || "actual";
     state.records.forEach(function (rec, idx) {
       if (!rec.tipoMuestreo) rec.tipoMuestreo = "programado";
       ensureRecordPeriodo(rec);
-      // Solo el periodo seleccionado en el panel
-      if ((rec.periodo || "") !== pk) return;
+      // Periodo activo o todos
+      if (periodoMode !== "todos" && (rec.periodo || "") !== pk) return;
       if (filter && !rec.punto.toLowerCase().includes(filter)) return;
       if (estFilter && rec.estado !== estFilter) return;
       if (tipoFilter && rec.tipoMuestreo !== tipoFilter) return;
@@ -2851,9 +2964,13 @@
         acciones = "<button class='btn btn-sm btn-primary' data-action='remuestreo' data-idx='" + idx + "' title='Registrar o programar remuestreo tras desinfección'>Remuestreo</button> " + acciones;
       }
 
+      var periodoLabel = periodoMode === "todos"
+        ? "<br><span style='font-size:0.72rem;color:var(--muted)'>" + esc(rec.periodo || "") + "</span>"
+        : "";
       tr.innerHTML =
         "<td>" + tipoBadge + "</td>" +
-        "<td>" + esc(rec.punto) + (rec.motivoRemuestreo ? "<br><span style='font-size:0.75rem;color:var(--muted)'>" + esc(rec.motivoRemuestreo) + "</span>" : "") + "</td>" +
+        "<td>" + esc(rec.punto) + periodoLabel +
+          (rec.motivoRemuestreo ? "<br><span style='font-size:0.75rem;color:var(--muted)'>" + esc(rec.motivoRemuestreo) + "</span>" : "") + "</td>" +
         "<td>" + esc(rec.nivelRiesgo) + "</td>" +
         "<td>" + esc(rec.fechaRecogida) + "</td>" +
         "<td><input type='text' data-idx='" + idx + "' data-field='aerobios' value='" + escAttr(fmtVal(rec.aerobios)) + "' style='max-width:4.5rem'>" +
@@ -2976,6 +3093,9 @@
   document.getElementById("filterEstado").addEventListener("change", renderReviewTable);
   if (document.getElementById("filterTipo")) {
     document.getElementById("filterTipo").addEventListener("change", renderReviewTable);
+  }
+  if (document.getElementById("filterPeriodo")) {
+    document.getElementById("filterPeriodo").addEventListener("change", renderReviewTable);
   }
   document.getElementById("btnRefreshTable").addEventListener("click", () => { updateDashboard(); });
   if (document.getElementById("btnResetProtocol")) {
@@ -3577,6 +3697,39 @@
   // ========== INIT ==========
   initYearSelect();
   initVistaAnualYearSelect();
+
+  /** Carga en memoria todos los periodos del histórico para poder ver cualquier mes */
+  async function hydrateFromHistory() {
+    try {
+      await openIDB();
+      var all = await idbGetAll();
+      if (!all || !all.length) return;
+      var n = 0;
+      all.forEach(function (p) {
+        var id = p.id || (p.year + "-" + String(p.month).padStart(2, "0"));
+        (p.records || []).forEach(function (r) {
+          var copy = JSON.parse(JSON.stringify(r));
+          ensureRecordPeriodo(copy);
+          if (!copy.periodo) copy.periodo = id;
+          var exists = state.records.some(function (x) {
+            ensureRecordPeriodo(x);
+            return x.punto === copy.punto && x.periodo === copy.periodo &&
+              (x.tipoMuestreo || "programado") === (copy.tipoMuestreo || "programado") &&
+              String(x.fechaRecogida || "") === String(copy.fechaRecogida || "");
+          });
+          if (!exists) {
+            state.records.push(copy);
+            n++;
+          }
+        });
+      });
+      if (n) log("Histórico recuperado: " + n + " registro(s) de " + all.length + " periodo(s)");
+      updateDashboard();
+    } catch (e) {
+      log("No se pudo hidratar histórico: " + e.message);
+    }
+  }
+  hydrateFromHistory();
   renderPointsTable();
   updatePeriodInfo();
   tryLoadLocal();

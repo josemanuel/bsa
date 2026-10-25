@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  ayuda.html — Manual de usuario de BSA Manager (v1.2, 2026)
+  ayuda.html — Manual de usuario de BSA Manager (v1.3, 2026)
   Colocar este archivo en la misma carpeta que index.html y enlazarlo desde la app, por ejemplo:
     <a href="ayuda.html" target="_blank" rel="noopener">Manual de usuario</a>
   No depende de ningún archivo externo: funciona sin conexión, igual que la aplicación.
@@ -114,7 +114,7 @@
 
 <header class="manual-header">
   <div class="logo">BSA Manager <span>| Bioseguridad Ambiental</span></div>
-  <div class="sub">Manual de usuario · Versión 1.2 · 2026 · <a href="./index.html" style="color:#cfe8f2;">Volver a la aplicación</a></div>
+  <div class="sub">Manual de usuario · Versión 1.3 · 2026 · <a href="./index.html" style="color:#cfe8f2;">Volver a la aplicación</a></div>
 </header>
 
 <div class="layout">
@@ -128,7 +128,7 @@
   <a href="#flujo">5. El trabajo de cada mes</a>
   <a href="#periodo">6. Elegir el periodo</a>
   <a href="#importar">7. Importar resultados</a>
-  <a href="#importar-pdf" class="l2">7.1 PDF del laboratorio</a>
+  <a href="#importar-pdf" class="l2">7.1 PDF: programados y remuestreos</a>
   <a href="#importar-csv" class="l2">7.2 CSV, JSON o texto pegado</a>
   <a href="#importar-manual" class="l2">7.3 Registro manual</a>
   <a href="#demo" class="l2">7.4 Datos de demostración</a>
@@ -136,7 +136,7 @@
   <a href="#incidencias">9. Incidencias y remuestreos</a>
   <a href="#protocolo">10. Protocolo ante fallo de BSA</a>
   <a href="#informe">11. Informe mensual</a>
-  <a href="#historico">12. Histórico y análisis evolutivo</a>
+  <a href="#planificacion">12. Planificación (vista anual e histórico)</a>
   <a href="#configuracion">13. Configuración</a>
   <a href="#proyecto">14. Guardar y gestionar el proyecto</a>
   <a href="#datos">15. Dónde se guardan los datos</a>
@@ -179,15 +179,16 @@
   <table class="data">
     <tr><th>Opción de menú</th><th>Para qué sirve</th></tr>
     <tr><td>Panel de control</td><td>Resumen del periodo: registros, documentos, validados, incidencias y estado general. También el registro de operaciones.</td></tr>
-    <tr><td>Archivos → Importación</td><td>Cargar PDF, CSV o JSON del laboratorio, pegar texto, añadir registros manuales o cargar la demo.</td></tr>
-    <tr><td>Archivos → Revisión de resultados</td><td>Tabla con todos los registros del periodo, su estado y las acciones sobre cada uno.</td></tr>
-    <tr><td>Archivos → Histórico de muestreos</td><td>Archivo de periodos guardados, carga retrospectiva y gráficos evolutivos.</td></tr>
-    <tr><td>Archivos → Gestión de proyecto</td><td>Guardar, descargar, cargar y reiniciar el proyecto; modo solo lectura; privacidad e instrucciones.</td></tr>
-    <tr><td>Informes → Informe mensual</td><td>Generar el informe del periodo, imprimirlo a PDF y exportar los datos.</td></tr>
-    <tr><td>Informes → Informe histórico evolutivo</td><td>Informe consolidado de varios periodos guardados en el histórico.</td></tr>
-    <tr><td>Configuración</td><td>Puntos de muestreo, umbrales de interpretación e identificación del centro.</td></tr>
-    <tr><td>Ayuda</td><td>Resumen rápido de uso dentro de la propia aplicación.</td></tr>
-    <tr><td>Acerca de</td><td>Autoría y versión de la aplicación.</td></tr>
+    <tr><td>Archivos → Importación</td><td>Dos zonas de carga: muestreos <em>programados</em> y <em>remuestreos</em>. También CSV, JSON, texto, manual y demo.</td></tr>
+    <tr><td>Archivos → Revisión de resultados</td><td>Tabla de registros (periodo activo o todos), estados y acciones. Checklist de protocolo.</td></tr>
+    <tr><td>Planificación → Vista anual</td><td>12 fichas del año: muestreos en verde/rojo y remuestreos vinculados al mes del incumplimiento.</td></tr>
+    <tr><td>Planificación → Histórico de muestreos</td><td>Archivo IndexedDB, carga retrospectiva, gráficos evolutivos y export/import JSON.</td></tr>
+    <tr><td>Informes → Informe mensual</td><td>Informe del periodo activo, imprimible a PDF y exportable.</td></tr>
+    <tr><td>Informes → Informe histórico evolutivo</td><td>Informe consolidado de varios periodos del histórico.</td></tr>
+    <tr><td>Configuración → Parámetros y puntos</td><td>Puntos de muestreo, umbrales e identificación del centro.</td></tr>
+    <tr><td>Configuración → Gestión de proyecto</td><td>Guardar, descargar, cargar y reiniciar el proyecto; modo solo lectura.</td></tr>
+    <tr><td>Ayuda</td><td>Abre este manual (<code>ayuda.html</code>) en una pestaña nueva.</td></tr>
+    <tr><td>Acerca de</td><td>Autoría, versión y resumen de funcionalidades.</td></tr>
   </table>
   <p>En pantallas estrechas (móvil o tablet) el menú se recoge bajo el botón <span class="kbd">☰</span>.</p>
 </section>
@@ -207,11 +208,11 @@
   <h2>5. El trabajo de cada mes (visión general)</h2>
   <p>El ciclo habitual con cada muestreo mensual es:</p>
   <div class="paso"><div class="num">1</div><div><strong>Elegir el periodo</strong> (mes y año) en el Panel de control o en la cabecera.</div></div>
-  <div class="paso"><div class="num">2</div><div><strong>Importar los informes del laboratorio</strong> (normalmente un PDF por punto de muestreo).</div></div>
+  <div class="paso"><div class="num">2</div><div><strong>Importar los PDF del laboratorio</strong> en la zona de <em>muestreos programados</em> (un PDF por punto).</div></div>
   <div class="paso"><div class="num">3</div><div><strong>Revisar los resultados</strong>: comprobar los valores extraídos y atender las incidencias.</div></div>
-  <div class="paso"><div class="num">4</div><div>Si hay fallo de bioseguridad por hongos: <strong>activar el protocolo</strong>, registrar el remuestreo y anotar sus resultados cuando lleguen.</div></div>
+  <div class="paso"><div class="num">4</div><div>Si hay fallo por hongos: <strong>activar el protocolo</strong>. Cuando llegue el informe tras desinfección, cárguelo en la zona de <em>remuestreos</em> y vincúlelo al muestreo fallido.</div></div>
   <div class="paso"><div class="num">5</div><div><strong>Generar el informe mensual</strong> y guardarlo en PDF (imprimir) o exportarlo.</div></div>
-  <div class="paso"><div class="num">6</div><div><strong>Guardar el periodo en el histórico</strong> y el proyecto en localStorage o en un archivo .json.</div></div>
+  <div class="paso"><div class="num">6</div><div>La importación <strong>guarda sola el periodo en el histórico</strong>. Opcionalmente descargue el proyecto .json como copia de seguridad.</div></div>
 </section>
 
 <section id="periodo">
@@ -222,22 +223,49 @@
     <li>En el <strong>Panel de control</strong>: elija Año y Mes y pulse <span class="kbd">Aplicar periodo</span>.</li>
   </ul>
   <p>El panel le informará de qué puntos tocan ese mes según el calendario de muestreo configurado (por ejemplo, los puntos trimestrales solo aparecen en sus meses).</p>
-  <div class="alert alert-info"><strong>Detalle importante:</strong> cada registro se asigna a un mes según la <strong>fecha de recogida</strong> del informe, no según el periodo elegido al importar. Si importa un PDF de agosto estando en octubre, el registro se guardará en agosto. El panel le avisará si hay registros en otros periodos.</div>
+  <div class="alert alert-info"><strong>Cómo se asigna el mes:</strong>
+    <ol style="margin:0.4rem 0 0;padding-left:1.2rem;">
+      <li>Si el <strong>nombre del archivo</strong> incluye el mes (p. ej. «… Junio 2026 …»), ese es el periodo del muestreo programado.</li>
+      <li>Si no, se usa la <strong>fecha de recogida</strong> del bloque «DATOS DE LA MUESTRA» (no la fecha final del ensayo).</li>
+      <li>Los <strong>remuestreos</strong> se asignan al mes del muestreo con incumplimiento, aunque la recogida sea del mes siguiente.</li>
+    </ol>
+  </div>
 </section>
 
 <section id="importar">
   <h2>7. Importar resultados</h2>
-  <p>En <strong>Archivos → Importación</strong> tiene cuatro vías para meter datos. Tras cada importación aparecerá la tarjeta <strong>Resultado de la importación</strong> con el detalle de lo procesado.</p>
+  <p>En <strong>Archivos → Importación</strong> hay varias vías. Tras cada carga aparece la tarjeta <strong>Resultado de la importación</strong> con el detalle de lo procesado. Cada lote se guarda automáticamente en el histórico IndexedDB.</p>
 
-  <h3 id="importar-pdf">7.1 PDF del laboratorio</h3>
-  <p>Es la vía habitual. Arrastre los PDF a la zona de arrastre o haga clic para seleccionarlos (puede cargar varios a la vez; lo normal es <strong>un PDF por punto de muestreo</strong>).</p>
-  <p>La aplicación lee el texto del PDF en su propio navegador (con PDF.js, librería local) y extrae automáticamente:</p>
+  <h3 id="importar-pdf">7.1 PDF del laboratorio: dos zonas de carga</h3>
+  <p>Hay <strong>dos zonas de arrastre</strong> (también se puede hacer clic para seleccionar archivos). Es importante usar la correcta:</p>
+  <table class="data">
+    <tr><th>Zona</th><th>Cuándo usarla</th><th>Efecto</th></tr>
+    <tr>
+      <td><strong>Muestreos programados</strong> (azul)</td>
+      <td>Informes del calendario mensual o trimestral de rutina.</td>
+      <td>Se registran como tipo <em>Programado</em>. El periodo sale del nombre del archivo o de la fecha de recogida.</td>
+    </tr>
+    <tr>
+      <td><strong>Remuestreos</strong> (naranja)</td>
+      <td>Informes tras desinfección por un incumplimiento de hongos.</td>
+      <td>Se registran como tipo <em>Remuestreo</em>. La aplicación pide a qué muestreo con incidencia corresponden.</td>
+    </tr>
+  </table>
+  <p>Puede cargar varios PDF a la vez en cada zona; lo habitual es <strong>un PDF por punto de muestreo</strong>.</p>
+  <p>La aplicación lee el texto del PDF en el navegador (PDF.js local) y extrae:</p>
   <ul>
-    <li>Denominación (punto de muestreo) — primero lo intenta por el nombre del archivo, luego por el contenido.</li>
-    <li>Aerobios mesófilos (ufc/m³), Hongos no patógenos y Hongos patógenos.</li>
+    <li>Denominación (punto) — prioriza el <strong>nombre del archivo</strong>, luego el contenido del PDF.</li>
+    <li>Aerobios mesófilos (ufc/m³), Hongos no patógenos y Hongos patógenos (tolera textos fragmentados del tipo «No d e tectado»).</li>
     <li>Fecha de recogida y número de informe.</li>
   </ul>
-  <div class="alert alert-warning"><strong>Revise siempre los datos extraídos</strong> en la pestaña Revisión. La lectura automática depende de cómo esté maquetado el PDF: un documento escaneado como imagen (sin texto seleccionable) no se puede leer, y un formato nuevo del laboratorio puede dar valores erróneos. En esos casos use el registro manual o el pegado de texto.</div>
+  <h3>Cómo cargar un remuestreo (ejemplo real)</h3>
+  <ol>
+    <li>Primero importe los PDF del muestreo fallido en <strong>Muestreos programados</strong> (p. ej. quirófanos 1 y 2 de junio, con Aspergillus).</li>
+    <li>Cuando llegue el informe de la nueva toma (aunque la fecha sea de julio), arrástrelo a la zona <strong>Remuestreos</strong>.</li>
+    <li>Aparecerá un diálogo con la lista de muestreos con incidencia; elija el correspondiente (por defecto sugiere el mismo punto y el más reciente).</li>
+    <li>El remuestreo quedará en el <strong>periodo de la incidencia</strong> (junio), no en el mes del nombre del archivo de julio.</li>
+  </ol>
+  <div class="alert alert-warning"><strong>Revise siempre los datos extraídos</strong> en Revisión. Un PDF escaneado como imagen (sin texto seleccionable) no se puede leer; un formato nuevo del laboratorio puede fallar. Use entonces el registro manual o el pegado de texto.</div>
 
   <h3 id="importar-csv">7.2 CSV, JSON o texto pegado</h3>
   <p>Puede arrastrar un archivo <code>.csv</code>, <code>.json</code> o <code>.txt</code>, o pulsar <span class="kbd">Pegar CSV / texto</span> y copiar el contenido directamente. El formato esperado (separado por punto y coma) es:</p>
@@ -273,7 +301,13 @@ Quirófano 1;Alto. R4;2;No detectado;No detectado;2026-08-25</pre>
     <li><span class="estado inc">Incidencia</span> Supera algún límite (aerobios, hongos no patógenos o patógenos).</li>
     <li><span class="estado pen">Pendiente</span> Falta información o está a la espera de resultados (por ejemplo, un remuestreo aún sin informe).</li>
   </ul>
-  <p>Arriba tiene filtros por texto (punto), por estado y por tipo (programados / remuestreos). En la columna <strong>Acciones</strong>:</p>
+  <p>Arriba tiene filtros por texto (punto), por estado, por tipo (programados / remuestreos) y por <strong>periodo</strong>:</p>
+  <ul>
+    <li><strong>Solo periodo activo</strong> (por defecto): muestra el mes elegido en la cabecera.</li>
+    <li><strong>Todos los periodos</strong>: muestra toda la información acumulada en memoria (útil para ver junio y julio a la vez).</li>
+  </ul>
+  <p>Cambiar el mes en la cabecera <strong>no borra</strong> los demás meses: solo filtra la vista. Al abrir la aplicación se recuperan del histórico IndexedDB todos los periodos guardados.</p>
+  <p>En la columna <strong>Acciones</strong>:</p>
   <ul>
     <li><span class="kbd">Reval.</span> vuelve a evaluar el registro con los umbrales actuales (útil tras cambiar la configuración).</li>
     <li><span class="kbd">X</span> elimina el registro (pide confirmación).</li>
@@ -285,14 +319,15 @@ Quirófano 1;Alto. R4;2;No detectado;No detectado;2026-08-25</pre>
 <section id="incidencias">
   <h2>9. Incidencias y remuestreos</h2>
   <p><strong>Cuándo hace falta remuestreo:</strong> cuando un muestreo programado incumple por <strong>hongos</strong> (no patógenos por encima del umbral de su riesgo, o cualquier hongo patógeno detectado). El protocolo de desinfección se activa por hongos; un exceso de aerobios mesófilos por sí solo no obliga a remuestreo según este criterio.</p>
-  <p><strong>Cómo registrarlo:</strong></p>
+  <p><strong>Cómo registrarlo (recomendado: zona de remuestreos):</strong></p>
   <ol>
-    <li>En Revisión, pulse <span class="kbd">Remuestreo</span> en la fila de la incidencia.</li>
-    <li>Se crea un registro de tipo <em>Remuestreo</em> en estado <span class="estado pen">Pendiente</span>, con el motivo ya anotado. La aplicación evita duplicados: si ya hay un remuestreo pendiente para ese punto, le preguntará antes de crear otro.</li>
-    <li>Realizada la desinfección y tomada la nueva muestra, cuando llegue el informe del laboratorio importe su PDF o edite los valores, marcando el tipo <em>Remuestreo</em>.</li>
-    <li>Si el remuestreo cumple, queda <span class="estado ok">Validado</span> y se anota «Remuestreo conforme tras desinfección». El ciclo queda cerrado.</li>
+    <li>Opcional: en Revisión, pulse <span class="kbd">Remuestreo</span> en la fila de la incidencia para crear un hueco pendiente con el motivo anotado.</li>
+    <li>Tras la desinfección y la nueva toma, cuando llegue el PDF del laboratorio, cárguelo en la zona <strong>Remuestreos</strong> (no en programados).</li>
+    <li>Confirme en el diálogo a qué muestreo programado con incidencia corresponde (lista numerada; por defecto el mismo punto y el más reciente).</li>
+    <li>Si el remuestreo cumple, queda <span class="estado ok">Validado</span>. El ciclo queda cerrado en el mes de la incidencia original.</li>
   </ol>
-  <div class="alert alert-info">El remuestreo se asigna al <strong>periodo de la incidencia original</strong>, aunque se recoja al mes siguiente, para que el informe mensual cuadre.</div>
+  <div class="alert alert-info">El remuestreo se asigna al <strong>periodo de la incidencia original</strong>, aunque la fecha de recogida o el nombre del archivo sean del mes siguiente, para que el informe mensual cuadre.</div>
+  <div class="alert alert-warning">Si carga un remuestreo por error en la zona de <em>programados</em>, se tratará como muestreo de rutina del mes del archivo (p. ej. julio) y no se vinculará al fallo de junio. Bórrelo y vuelva a cargarlo en la zona naranja.</div>
   <p>El contador de la tabla le avisará de los remuestreos pendientes de resolver.</p>
 </section>
 
@@ -326,20 +361,31 @@ Quirófano 1;Alto. R4;2;No detectado;No detectado;2026-08-25</pre>
   <div class="alert alert-warning">Si el periodo tiene incidencias sin resolver o remuestreos pendientes, el informe lo indicará. Resuélvalos antes de emitir la versión definitiva.</div>
 </section>
 
-<section id="historico">
-  <h2>12. Histórico y análisis evolutivo</h2>
-  <p>En <strong>Archivos → Histórico de muestreos</strong>:</p>
+<section id="planificacion">
+  <h2>12. Planificación (vista anual e histórico)</h2>
+
+  <h3>Vista anual</h3>
+  <p>En <strong>Planificación → Vista anual</strong> elija el año y verá <strong>12 fichas mensuales</strong>:</p>
   <ul>
-    <li><span class="kbd">Guardar periodo actual en histórico</span>: archiva el mes terminado en IndexedDB (almacenamiento persistente del navegador). Hágalo al cerrar cada informe mensual.</li>
-    <li><span class="kbd">Cargar datos retrospectivos (JSON)</span>: incorpora periodos anteriores desde archivos JSON, para construir la historia del centro.</li>
+    <li>Cada ficha lista los muestreos programados del mes (punto y aerobios) con indicador verde (conforme), rojo (incidencia) o gris (pendiente / sin datos).</li>
+    <li>Los <strong>remuestreos</strong> aparecen en la ficha del mes del incumplimiento (aunque la recogida sea posterior), marcados en azul.</li>
+    <li>Al pulsar una ficha se abre la <strong>Revisión</strong> de ese mes.</li>
+  </ul>
+
+  <h3>Histórico de muestreos</h3>
+  <p>En <strong>Planificación → Histórico de muestreos</strong>:</p>
+  <ul>
+    <li>Cada importación de PDF <strong>actualiza sola</strong> el histórico IndexedDB del periodo afectado. También puede pulsar <span class="kbd">Guardar periodo actual en histórico</span> de forma manual.</li>
+    <li>Al abrir la aplicación se <strong>recuperan en memoria</strong> todos los periodos del histórico, de modo que puede consultar cualquier mes sin perder los demás.</li>
+    <li><span class="kbd">Cargar datos retrospectivos (JSON)</span>: incorpora periodos desde archivos JSON.</li>
     <li><span class="kbd">Exportar histórico completo</span>: descarga todo el archivo en JSON (copia de seguridad).</li>
     <li><span class="kbd">Vaciar histórico</span>: lo borra por completo (pide confirmación; no se puede deshacer).</li>
   </ul>
-  <p>La tabla de <strong>Periodos almacenados</strong> resume cada mes (puntos, válidos, incidencias) y permite cargarlo de nuevo o eliminarlo.</p>
+  <p>La tabla de <strong>Periodos almacenados</strong> resume cada mes (puntos, válidos, incidencias) y permite cargarlo o eliminarlo.</p>
   <h3>Gráficos evolutivos</h3>
   <p>Elija el rango (Desde / Hasta) y, si quiere, un punto concreto, y pulse <span class="kbd">Actualizar gráficos</span>. Verá la evolución de aerobios mesófilos (ufc/m³) y el porcentaje de cumplimiento de bioseguridad por mes.</p>
   <h3>Informe histórico evolutivo</h3>
-  <p>En <strong>Informes → Informe histórico evolutivo</strong>, seleccione el rango de meses y pulse <span class="kbd">Generar informe histórico</span>: obtendrá un documento consolidado con los resultados por periodo y el análisis evolutivo, imprimible en PDF.</p>
+  <p>En <strong>Informes → Informe histórico evolutivo</strong>, seleccione el rango de meses y pulse <span class="kbd">Generar informe histórico</span>: documento consolidado imprimible en PDF.</p>
 </section>
 
 <section id="configuracion">
@@ -361,7 +407,7 @@ Quirófano 1;Alto. R4;2;No detectado;No detectado;2026-08-25</pre>
 
 <section id="proyecto">
   <h2>14. Guardar y gestionar el proyecto</h2>
-  <p>En <strong>Archivos → Gestión de proyecto</strong>:</p>
+  <p>En <strong>Configuración → Gestión de proyecto</strong>:</p>
   <ul>
     <li><span class="kbd">Guardar proyecto (localStorage)</span>: guarda todo el trabajo en el navegador. La próxima vez que abra la aplicación se restaurará automáticamente.</li>
     <li><span class="kbd">Descargar archivo .json</span>: descarga el proyecto completo. Es su copia de seguridad portable: hágala con regularidad.</li>
@@ -409,7 +455,11 @@ Quirófano 1;Alto. R4;2;No detectado;No detectado;2026-08-25</pre>
     <li>Revise el registro en Revisión y corríjalo con <span class="kbd">X</span> + nuevo registro manual si fuera necesario.</li>
   </ul>
   <h3>Importé datos pero el panel aparece vacío</h3>
-  <p>Cada registro se guarda en el mes de su fecha de recogida. Cambie el periodo al mes correcto (cabecera o Panel de control). El resumen de validación le avisa si hay registros en otros periodos.</p>
+  <p>Cada registro se guarda en el mes de su fecha de recogida o del nombre del archivo. Cambie el periodo al mes correcto en la cabecera, o en Revisión elija el filtro <strong>Todos los periodos</strong>. El resumen de validación avisa si hay registros en otros meses.</p>
+  <h3>Un remuestreo aparece como muestreo de julio (u otro mes)</h3>
+  <p>Se cargó en la zona de <em>programados</em>. Elimínelo y vuelva a importar el PDF en la zona <strong>Remuestreos</strong>, vinculándolo al muestreo con incidencia.</p>
+  <h3>Tras cargar un mes nuevo ya no veo el anterior</h3>
+  <p>Los datos siguen en memoria y en el histórico. Cambie el mes en la cabecera o use «Todos los periodos» en Revisión. Si reinició el proyecto o vació el histórico, habrá que reimportar o cargar un .json de copia de seguridad.</p>
   <h3>Cerré el navegador y perdí el trabajo</h3>
   <p>El trabajo solo se recupera automáticamente si pulsó <span class="kbd">Guardar proyecto (localStorage)</span>. Si descargó el archivo .json, cárguelo desde Gestión de proyecto. Acostúmbrese a guardar antes de cerrar.</p>
   <h3>Cambié los umbrales y quiero reevaluar los registros</h3>
@@ -450,7 +500,7 @@ Quirófano 1;Alto. R4;2;No detectado;No detectado;2026-08-25</pre>
 </div>
 
 <footer class="manual-footer">
-  BSA Manager · Manual de usuario · Dr. José Manuel Fernández Carreira · v1.2 · 2026 · <a href="./index.html">Volver a la aplicación</a>
+  BSA Manager · Manual de usuario · Dr. José Manuel Fernández Carreira · v1.3 · 2026 · <a href="./index.html">Volver a la aplicación</a>
 </footer>
 
 </body>
