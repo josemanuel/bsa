@@ -997,6 +997,13 @@
             <label>Hasta</label>
             <input type="month" id="histRepTo" value="2026-12">
           </div>
+          <div>
+            <label for="histRepGroup">Agrupar por</label>
+            <select id="histRepGroup">
+              <option value="mes">Fecha de muestreo → Punto</option>
+              <option value="punto">Punto de muestreo → Fecha</option>
+            </select>
+          </div>
           <div style="display:flex;align-items:flex-end;">
             <button class="btn btn-primary" id="btnGenHistReport">Generar informe histórico</button>
           </div>
@@ -1630,8 +1637,14 @@
     if (/quir[oó]fano\s*1/i.test(n)) return state.points.find(p => p.id === "Q1");
     if (/quir[oó]fano\s*2/i.test(n)) return state.points.find(p => p.id === "Q2");
     if (/quir[oó]fano\s*3/i.test(n)) return state.points.find(p => p.id === "Q3");
-    // Fallback: primer token
-    return state.points.find(p => n.includes(p.nombre.toLowerCase().split(" ")[0]));
+    if (/endoscop/i.test(n)) return state.points.find(p => /endoscop/i.test(p.nombre));
+    // Esterilización: dos puntos (no unificar)
+    if (/esteriliz/i.test(n)) {
+      if (/limp|almacen|sucio/i.test(n)) return state.points.find(p => p.id === "EST_LIM");
+      if (/est[eé]ril|proceso|empaquet/i.test(n)) return state.points.find(p => p.id === "EST_EST");
+    }
+    // Fallback: primer token (evitar que "Esterilización" caiga siempre en el mismo)
+    return state.points.find(p => n.includes(p.nombre.toLowerCase()));
   }
 
   /** Une letras separadas por espacios (artefacto habitual de PDF.js): "N o  d e t e c t a d o" → "nodetectado" */
@@ -1892,12 +1905,12 @@
       if (!recs.length) {
         html += '<li style="color:var(--muted)"><span class="dot pend"></span>Sin muestreos registrados</li>';
       } else {
-        prog.forEach(function (r) {
+        sortRecordsByPointOrder(prog).forEach(function (r) {
           var cls = r.estado === "validado" ? "ok" : (r.estado === "incidencia" ? "bad" : "pend");
           html += "<li><span><span class=\"dot " + cls + "\"></span>" + esc(r.punto) + "</span>";
           html += "<span style=\"color:var(--muted)\">" + esc(fmtVal(r.aerobios)) + "</span></li>";
         });
-        rems.forEach(function (r) {
+        sortRecordsByPointOrder(rems).forEach(function (r) {
           var cls = r.estado === "validado" ? "ok" : (r.estado === "incidencia" ? "bad" : "pend");
           html += "<li><span><span class=\"dot rem\"></span><em>Remuestreo</em> " + esc(r.punto) + "</span>";
           html += "<span style=\"color:var(--muted)\">" + (r.estado === "validado" ? "OK" : esc(r.estado || "pend.")) + "</span></li>";
@@ -2202,18 +2215,59 @@
   }
 
   /**
-   * Pregunta a qué muestreo programado corresponde un remuestreo.
-   * Devuelve { periodoIncidencia, punto, motivo } o null si cancela.
+   * Resuelve el vínculo de un remuestreo al muestreo programado con incidencia.
+   * Auto-elige si el punto coincide de forma unívoca (permite lotes sin placeholder previo).
+   * Solo pregunta si hay ambigüedad o no hay candidatos.
    */
   function askRemuestreoLink(puntoDetectado, fechaRem) {
     var cands = listIncidenciaCandidates(puntoDetectado);
+    function pack(chosen) {
+      ensureRecordPeriodo(chosen);
+      return {
+        periodoIncidencia: chosen.periodo || periodKey(),
+        punto: chosen.punto,
+        motivo: chosen.motivoRemuestreoSugerido || (chosen._issues && chosen._issues.join("; ")) || "Tras incumplimiento"
+      };
+    }
+    // 1) Mismo punto: auto si hay uno; si hay varios, el de fecha más cercana anterior
+    var same = cands.filter(function (c) { return puntoDetectado && c.punto === puntoDetectado; });
+    if (same.length === 1) {
+      log("Remuestreo auto-vinculado a " + same[0].punto + " · " + same[0].periodo);
+      return pack(same[0]);
+    }
+    if (same.length > 1) {
+      same.sort(function (a, b) {
+        return String(b.fechaRecogida || "").localeCompare(String(a.fechaRecogida || ""));
+      });
+      // Preferir el más reciente no posterior a la fecha del remuestreo
+      var chosen = same[0];
+      if (fechaRem) {
+        for (var i = 0; i < same.length; i++) {
+          if (!same[i].fechaRecogida || same[i].fechaRecogida <= fechaRem) { chosen = same[i]; break; }
+        }
+      }
+      log("Remuestreo auto-vinculado (varios candidatos mismo punto) a " + chosen.punto + " · " + chosen.periodo);
+      return pack(chosen);
+    }
+    // 2) Sin coincidencia de punto pero una sola incidencia abierta → usar esa
+    if (cands.length === 1) {
+      log("Remuestreo auto-vinculado a única incidencia: " + cands[0].punto + " · " + cands[0].periodo);
+      return pack(cands[0]);
+    }
+    // 3) Sin incidencias: pedir periodo manual (no hace falta placeholder previo)
     if (!cands.length) {
-      // Sin incidencias en memoria: pedir periodo manual
       var sug = periodKey();
+      // Sugerir mes anterior si la recogida es a primeros de mes
+      if (fechaRem && /^\d{4}-\d{2}/.test(fechaRem)) {
+        var y = parseInt(fechaRem.slice(0, 4), 10);
+        var m = parseInt(fechaRem.slice(5, 7), 10) - 1;
+        if (m < 1) { m = 12; y--; }
+        sug = y + "-" + String(m).padStart(2, "0");
+      }
       var ans = prompt(
         "REMUESTREO de «" + (puntoDetectado || "?") + "» (recogida " + (fechaRem || "?") + ")\n\n" +
-        "No hay muestreos con incidencia en memoria.\n" +
-        "Indique el periodo del muestreo fallido (AAAA-MM), p. ej. el mes anterior:",
+        "No hay muestreos con incidencia en memoria para ese punto.\n" +
+        "Indique el periodo del muestreo fallido (AAAA-MM):",
         sug
       );
       if (!ans) return null;
@@ -2223,20 +2277,16 @@
         motivo: "Remuestreo tras desinfección"
       };
     }
+    // 4) Varios puntos distintos: preguntar
     var lines = cands.map(function (c, i) {
       return (i + 1) + ") " + c.punto + " · " + (c.periodo || "") + " · recogida " + (c.fechaRecogida || "") +
         (c._issues && c._issues.length ? " · " + c._issues[0] : "");
     });
-    var def = 1;
-    // Preferir mismo punto y periodo más cercano anterior a fechaRem
-    for (var i = 0; i < cands.length; i++) {
-      if (puntoDetectado && cands[i].punto === puntoDetectado) { def = i + 1; break; }
-    }
     var pick = prompt(
-      "REMUESTREO detectado («" + (puntoDetectado || "?") + "», recogida " + (fechaRem || "?") + ")\n\n" +
+      "REMUESTREO («" + (puntoDetectado || "?") + "», " + (fechaRem || "?") + ")\n\n" +
       "¿A qué muestreo programado corresponde?\n\n" + lines.join("\n") +
       "\n\nEscriba el número (1–" + cands.length + "):",
-      String(def)
+      "1"
     );
     if (pick === null) return null;
     var idx = parseInt(pick, 10) - 1;
@@ -2244,12 +2294,7 @@
       alert("Selección no válida.");
       return null;
     }
-    var chosen = cands[idx];
-    return {
-      periodoIncidencia: chosen.periodo || periodKey(),
-      punto: chosen.punto,
-      motivo: chosen.motivoRemuestreoSugerido || (chosen._issues && chosen._issues.join("; ")) || "Tras incumplimiento"
-    };
+    return pack(cands[idx]);
   }
 
   // Configurar worker de PDF.js (local)
@@ -3265,7 +3310,7 @@
     if (programados.length === 0) {
       html += "<tr><td colspan='5' style='text-align:center;color:#888;'>Sin muestreos programados</td></tr>";
     } else {
-      programados.forEach(function (r) {
+      sortRecordsByPointOrder(programados).forEach(function (r) {
         html += "<tr>";
         html += "<td>" + esc(r.punto) + "</td>";
         html += "<td>" + esc(r.nivelRiesgo) + "</td>";
@@ -3282,7 +3327,7 @@
       html += "<table><thead><tr>";
       html += "<th>Punto</th><th>Fecha</th><th>Motivo</th><th>Aerobios</th><th>Hongos N.P.</th><th>Hongos Pat.</th><th>Resultado</th>";
       html += "</tr></thead><tbody>";
-      remuestreos.forEach(function (r) {
+      sortRecordsByPointOrder(remuestreos).forEach(function (r) {
         var resLabel = r.estado === "validado" ? "Conforme" : (r.estado === "incidencia" ? "No conforme" : "Pendiente");
         html += "<tr>";
         html += "<td>" + esc(r.punto) + "</td>";
@@ -3624,18 +3669,72 @@
 
 
   // ========== INFORME HISTÓRICO ==========
+  function estadoConformeLabel(r) {
+    if (r.estado === "validado") return "Conforme";
+    if (r.estado === "incidencia") return "No conforme";
+    return "Pendiente";
+  }
+
+  function monthLabelFromPeriod(pk) {
+    if (!pk || pk.length < 7) return pk || "—";
+    var parts = pk.split("-");
+    return monthName(parts[1]) + " " + parts[0];
+  }
+
   async function generateHistoricalReport() {
     const from = document.getElementById("histRepFrom").value;
     const to = document.getElementById("histRepTo").value;
+    const groupBy = (document.getElementById("histRepGroup") && document.getElementById("histRepGroup").value) || "mes";
     const preview = document.getElementById("histReportPreview");
     const all = await idbGetAll();
     const periods = all.filter(p => p.id >= from && p.id <= to).sort((a, b) => a.id.localeCompare(b.id));
+    // También incluir registros en memoria del rango
     const hospital = state.config.hospital || "";
     const responsable = state.config.responsable || "";
     const fechaInforme = new Date().toLocaleDateString("es-ES");
 
-    if (!periods.length) {
-      preview.innerHTML = "<p style='text-align:center;color:var(--danger);'>No hay periodos en el histórico para el rango seleccionado. Guarde periodos desde la pestaña Histórico.</p>";
+    // Aplanar filas: Fecha de muestreo | Punto | Aerobios | Hongos NP | Hongos Pat | Estado
+    var rows = [];
+    periods.forEach(function (p) {
+      sortRecordsByPointOrder(p.records || []).forEach(function (r) {
+        if ((r.tipoMuestreo || "programado") === "remuestreo") return; // tabla anual = programados; remuestreos en nota
+        ensureRecordPeriodo(r);
+        rows.push({
+          periodo: r.periodo || p.id,
+          mesLabel: monthLabelFromPeriod(r.periodo || p.id),
+          punto: r.punto,
+          aerobios: r.aerobios,
+          hongosNP: r.hongosNP,
+          hongosPat: r.hongosPat,
+          estado: estadoConformeLabel(r),
+          tipo: r.tipoMuestreo || "programado"
+        });
+      });
+    });
+    // Completar con memoria no archivada
+    state.records.forEach(function (r) {
+      ensureRecordPeriodo(r);
+      if ((r.tipoMuestreo || "programado") === "remuestreo") return;
+      if (!r.periodo || r.periodo < from || r.periodo > to) return;
+      var exists = rows.some(function (x) {
+        return x.periodo === r.periodo && x.punto === r.punto;
+      });
+      if (!exists) {
+        rows.push({
+          periodo: r.periodo,
+          mesLabel: monthLabelFromPeriod(r.periodo),
+          punto: r.punto,
+          aerobios: r.aerobios,
+          hongosNP: r.hongosNP,
+          hongosPat: r.hongosPat,
+          estado: estadoConformeLabel(r),
+          tipo: "programado"
+        });
+      }
+    });
+
+    if (!rows.length && !periods.length) {
+      preview.innerHTML = "<p style='text-align:center;color:var(--danger);'>No hay datos en el rango seleccionado. Importe muestreos o recupere el histórico.</p>";
       return;
     }
 
@@ -3644,44 +3743,74 @@
     html += "<p style='text-align:center;color:var(--muted);'>Generado " + fechaInforme + "</p>";
     html += "<p style='text-align:center;font-weight:600;'>" + esc(hospital) + "</p>";
     if (responsable) html += "<p style='text-align:center;font-size:0.9rem;'>Responsable: " + esc(responsable) + "</p>";
-    html += "<p style='text-align:center;margin-bottom:1rem;'>Periodo analizado: <strong>" + esc(from) + "</strong> a <strong>" + esc(to) + "</strong> (" + periods.length + " muestreos)</p>";
+    html += "<p style='text-align:center;margin-bottom:1rem;'>Periodo: <strong>" + esc(from) + "</strong> a <strong>" + esc(to) + "</strong></p>";
 
-    // Resumen global
-    let totalPts = 0, totalOk = 0, totalInc = 0;
-    periods.forEach(p => {
-      (p.records || []).forEach(r => {
-        totalPts++;
-        if (r.estado === "validado") totalOk++;
-        else if (r.estado === "incidencia") totalInc++;
-      });
-    });
+    var totalPts = rows.length;
+    var totalOk = rows.filter(function (r) { return r.estado === "Conforme"; }).length;
+    var totalInc = rows.filter(function (r) { return r.estado === "No conforme"; }).length;
     html += "<div style='background:#f0f7f0;padding:0.8rem 1rem;border-left:4px solid var(--success);margin:1rem 0;'>";
     html += "<p><strong>Resumen global:</strong> " + totalPts + " determinaciones · " +
-      totalOk + " conformes · " + totalInc + " incidencias · Cumplimiento: <strong>" +
+      totalOk + " conformes · " + totalInc + " no conformes · Cumplimiento: <strong>" +
       (totalPts ? Math.round(100 * totalOk / totalPts) : 0) + "%</strong></p></div>";
 
-    // Tabla por periodo
-    html += "<h2 style='color:var(--primary);font-size:1.05rem;margin-top:1.2rem;border-bottom:1px solid #ccc;'>Resultados por periodo</h2>";
-    periods.forEach(p => {
-      const recs = p.records || [];
-      const ok = recs.filter(r => r.estado === "validado").length;
-      const inc = recs.filter(r => r.estado === "incidencia").length;
-      html += "<h3 style='font-size:0.95rem;margin:0.8rem 0 0.4rem;'>" + esc(p.id) +
-        " <span style='font-weight:400;color:#666;'>(" + ok + " OK / " + inc + " incidencias)</span></h3>";
-      html += "<table style='width:100%;border-collapse:collapse;font-size:0.85rem;margin-bottom:0.6rem;'>";
-      html += "<thead><tr style='background:#e8eef2;'><th style='border:1px solid #333;padding:0.3rem;'>Punto</th><th style='border:1px solid #333;padding:0.3rem;'>Riesgo</th>" +
-        "<th style='border:1px solid #333;padding:0.3rem;'>Aerobios</th><th style='border:1px solid #333;padding:0.3rem;'>Hongos N.P.</th>" +
-        "<th style='border:1px solid #333;padding:0.3rem;'>Hongos Pat.</th><th style='border:1px solid #333;padding:0.3rem;'>Estado</th></tr></thead><tbody>";
-      recs.forEach(r => {
-        html += "<tr><td style='border:1px solid #333;padding:0.3rem;'>" + esc(r.punto) + "</td>" +
-          "<td style='border:1px solid #333;padding:0.3rem;'>" + esc(r.nivelRiesgo) + "</td>" +
-          "<td style='border:1px solid #333;padding:0.3rem;'><strong>" + esc(fmtVal(r.aerobios)) + "</strong></td>" +
-          "<td style='border:1px solid #333;padding:0.3rem;'>" + esc(fmtVal(r.hongosNP)) + "</td>" +
-          "<td style='border:1px solid #333;padding:0.3rem;'>" + esc(fmtVal(r.hongosPat)) + "</td>" +
-          "<td style='border:1px solid #333;padding:0.3rem;'>" + esc(r.estado) + "</td></tr>";
+    // Tabla homogénea (plantilla anual): agrupar por mes o por punto
+    html += "<h2 style='color:var(--primary);font-size:1.05rem;margin-top:1.2rem;border-bottom:1px solid #ccc;'>Resultados</h2>";
+    html += "<p style='font-size:0.85rem;color:#666;'>Agrupación: <strong>" +
+      (groupBy === "punto" ? "Punto de muestreo → Fecha" : "Fecha de muestreo → Punto") + "</strong></p>";
+
+    html += "<table style='width:100%;border-collapse:collapse;font-size:0.85rem;margin-bottom:1rem;'>";
+    if (groupBy === "punto") {
+      html += "<thead><tr style='background:#0d4f6b;color:#fff;'>" +
+        "<th style='border:1px solid #333;padding:0.35rem;'>Punto de muestreo</th>" +
+        "<th style='border:1px solid #333;padding:0.35rem;'>Fecha de muestreo</th>" +
+        "<th style='border:1px solid #333;padding:0.35rem;'>Aerobios mesófilos totales ufc/m³</th>" +
+        "<th style='border:1px solid #333;padding:0.35rem;'>Hongos No Patógenos (N.P.)</th>" +
+        "<th style='border:1px solid #333;padding:0.35rem;'>Hongos Patógenos</th>" +
+        "<th style='border:1px solid #333;padding:0.35rem;'>Estado</th></tr></thead><tbody>";
+      rows.sort(function (a, b) {
+        var d = pointOrderIndex(a.punto) - pointOrderIndex(b.punto);
+        return d !== 0 ? d : String(a.periodo).localeCompare(String(b.periodo));
       });
-      html += "</tbody></table>";
-    });
+      var lastP = null;
+      rows.forEach(function (r) {
+        var showP = r.punto !== lastP ? r.punto : "";
+        lastP = r.punto;
+        var stColor = r.estado === "Conforme" ? "#1b7a3d" : (r.estado === "No conforme" ? "#a12c2c" : "#666");
+        html += "<tr>" +
+          "<td style='border:1px solid #333;padding:0.3rem;font-weight:" + (showP ? "600" : "400") + ";'>" + esc(showP) + "</td>" +
+          "<td style='border:1px solid #333;padding:0.3rem;'>" + esc(r.mesLabel) + "</td>" +
+          "<td style='border:1px solid #333;padding:0.3rem;text-align:center;'><strong>" + esc(fmtVal(r.aerobios)) + "</strong></td>" +
+          "<td style='border:1px solid #333;padding:0.3rem;text-align:center;'>" + esc(fmtVal(r.hongosNP)) + "</td>" +
+          "<td style='border:1px solid #333;padding:0.3rem;text-align:center;'>" + esc(fmtVal(r.hongosPat)) + "</td>" +
+          "<td style='border:1px solid #333;padding:0.3rem;color:" + stColor + ";font-weight:600;'>" + esc(r.estado) + "</td></tr>";
+      });
+    } else {
+      html += "<thead><tr style='background:#0d4f6b;color:#fff;'>" +
+        "<th style='border:1px solid #333;padding:0.35rem;'>Fecha de muestreo</th>" +
+        "<th style='border:1px solid #333;padding:0.35rem;'>Punto de muestreo</th>" +
+        "<th style='border:1px solid #333;padding:0.35rem;'>Aerobios mesófilos totales ufc/m³</th>" +
+        "<th style='border:1px solid #333;padding:0.35rem;'>Hongos No Patógenos (N.P.)</th>" +
+        "<th style='border:1px solid #333;padding:0.35rem;'>Hongos Patógenos</th>" +
+        "<th style='border:1px solid #333;padding:0.35rem;'>Estado</th></tr></thead><tbody>";
+      rows.sort(function (a, b) {
+        var d = String(a.periodo).localeCompare(String(b.periodo));
+        return d !== 0 ? d : pointOrderIndex(a.punto) - pointOrderIndex(b.punto);
+      });
+      var lastM = null;
+      rows.forEach(function (r) {
+        var showM = r.periodo !== lastM ? r.mesLabel : "";
+        lastM = r.periodo;
+        var stColor = r.estado === "Conforme" ? "#1b7a3d" : (r.estado === "No conforme" ? "#a12c2c" : "#666");
+        html += "<tr>" +
+          "<td style='border:1px solid #333;padding:0.3rem;font-weight:" + (showM ? "600" : "400") + ";'>" + esc(showM) + "</td>" +
+          "<td style='border:1px solid #333;padding:0.3rem;'>" + esc(r.punto) + "</td>" +
+          "<td style='border:1px solid #333;padding:0.3rem;text-align:center;'><strong>" + esc(fmtVal(r.aerobios)) + "</strong></td>" +
+          "<td style='border:1px solid #333;padding:0.3rem;text-align:center;'>" + esc(fmtVal(r.hongosNP)) + "</td>" +
+          "<td style='border:1px solid #333;padding:0.3rem;text-align:center;'>" + esc(fmtVal(r.hongosPat)) + "</td>" +
+          "<td style='border:1px solid #333;padding:0.3rem;color:" + stColor + ";font-weight:600;'>" + esc(r.estado) + "</td></tr>";
+      });
+    }
+    html += "</tbody></table>";
 
     // Evolución (datos numéricos para el informe escrito)
     html += "<h2 style='color:var(--primary);font-size:1.05rem;margin-top:1.2rem;border-bottom:1px solid #ccc;'>Análisis evolutivo</h2>";
