@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<!--
+  ayuda.html — Manual de usuario de BSA Manager (v1.2, 2026)
+  Colocar este archivo en la misma carpeta que index.html y enlazarlo desde la app, por ejemplo:
+    <a href="ayuda.html" target="_blank" rel="noopener">Manual de usuario</a>
+  No depende de ningún archivo externo: funciona sin conexión, igual que la aplicación.
+-->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manual de usuario — BSA Manager</title>
+<style>
+  :root {
+    --primary: #0d4f6b;
+    --primary-dark: #083447;
+    --accent: #1a7a9c;
+    --success: #1b7a3d;
+    --warning: #b8860b;
+    --danger: #a12c2c;
+    --bg: #f4f7f9;
+    --card: #ffffff;
+    --border: #d0dce3;
+    --text: #1a2a33;
+    --muted: #5a6f7a;
+    --radius: 8px;
+    --shadow: 0 2px 8px rgba(13,79,107,0.08);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+  }
+  header.manual-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    padding: 1.4rem 1.5rem;
+  }
+  header.manual-header .logo { font-size: 1.3rem; font-weight: 700; }
+  header.manual-header .logo span { font-weight: 400; opacity: 0.85; font-size: 0.95rem; }
+  header.manual-header .sub { font-size: 0.9rem; opacity: 0.9; margin-top: 0.3rem; }
+  .layout { max-width: 1100px; margin: 0 auto; padding: 1.25rem 1.5rem 3rem; display: flex; gap: 1.5rem; align-items: flex-start; }
+  nav.toc {
+    position: sticky; top: 1rem; flex: 0 0 250px;
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 1rem 1.1rem; font-size: 0.88rem;
+    max-height: calc(100vh - 2rem); overflow-y: auto;
+  }
+  nav.toc strong { display: block; color: var(--primary); margin-bottom: 0.4rem; font-size: 0.95rem; }
+  nav.toc a { display: block; color: var(--text); text-decoration: none; padding: 0.18rem 0; }
+  nav.toc a:hover { color: var(--accent); text-decoration: underline; }
+  nav.toc a.l2 { padding-left: 0.9rem; color: var(--muted); }
+  main.content { flex: 1; min-width: 0; }
+  section {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 1.25rem 1.4rem; margin-bottom: 1.25rem;
+  }
+  h1 { font-size: 1.35rem; color: var(--primary); margin: 0 0 0.6rem; }
+  h2 { font-size: 1.12rem; color: var(--primary); margin: 0 0 0.7rem; border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; }
+  h3 { font-size: 0.98rem; color: var(--primary-dark); margin: 1rem 0 0.4rem; }
+  p { margin: 0.45rem 0; }
+  ul, ol { padding-left: 1.3rem; margin: 0.4rem 0; }
+  li { margin: 0.25rem 0; }
+  table.data { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin: 0.6rem 0; }
+  table.data th, table.data td { border: 1px solid var(--border); padding: 0.4rem 0.55rem; text-align: left; }
+  table.data th { background: var(--primary); color: #fff; font-weight: 600; }
+  table.data tr:nth-child(even) td { background: #f2f7fa; }
+  .alert { border-radius: var(--radius); padding: 0.7rem 0.9rem; margin: 0.7rem 0; font-size: 0.9rem; border-left: 4px solid; }
+  .alert-info { background: #eaf4f9; border-color: var(--accent); }
+  .alert-success { background: #e9f6ec; border-color: var(--success); }
+  .alert-warning { background: #fdf6e3; border-color: var(--warning); }
+  .alert-danger { background: #fbeaea; border-color: var(--danger); }
+  .kbd {
+    background: #eef3f6; border: 1px solid var(--border); border-radius: 4px;
+    padding: 0.05rem 0.4rem; font-size: 0.88rem; font-weight: 600; white-space: nowrap;
+  }
+  code, pre {
+    font-family: Consolas, "Courier New", monospace; font-size: 0.86rem;
+    background: #eef3f6; border: 1px solid var(--border); border-radius: 4px;
+  }
+  code { padding: 0.05rem 0.35rem; }
+  pre { padding: 0.7rem 0.9rem; overflow-x: auto; }
+  .paso { display: flex; gap: 0.7rem; align-items: flex-start; margin: 0.7rem 0; }
+  .paso .num {
+    flex: 0 0 auto; width: 1.7rem; height: 1.7rem; border-radius: 50%;
+    background: var(--primary); color: #fff; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; font-size: 0.95rem;
+  }
+  .estado { display: inline-block; border-radius: 4px; padding: 0.05rem 0.5rem; font-size: 0.83rem; font-weight: 600; color: #fff; }
+  .estado.ok { background: var(--success); }
+  .estado.inc { background: var(--danger); }
+  .estado.pen { background: var(--warning); }
+  footer.manual-footer { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 1.5rem; }
+  a { color: var(--accent); }
+  @media (max-width: 900px) {
+    .layout { flex-direction: column; align-items: stretch; padding: 1rem 0.75rem 2.5rem; }
+    nav.toc { position: static; flex: none; width: 100%; max-height: none; }
+    main.content { width: 100%; }
+    section { padding: 1rem 1rem; }
+    table.data { display: block; overflow-x: auto; }
+  }
+  @media print {
+    body { background: #fff; }
+    nav.toc { display: none; }
+    section { box-shadow: none; break-inside: avoid-page; border: 1px solid #ccc; }
+  }
+</style>
+</head>
+<body>
+
+<header class="manual-header">
+  <div class="logo">BSA Manager <span>| Bioseguridad Ambiental</span></div>
+  <div class="sub">Manual de usuario · Versión 1.2 · 2026 · <a href="./index.html" style="color:#cfe8f2;">Volver a la aplicación</a></div>
+</header>
+
+<div class="layout">
+
+<nav class="toc">
+  <strong>Índice</strong>
+  <a href="#que-es">1. Qué es BSA Manager</a>
+  <a href="#antes">2. Antes de empezar</a>
+  <a href="#pantalla">3. Conocer la pantalla</a>
+  <a href="#primera-vez">4. Puesta en marcha inicial</a>
+  <a href="#flujo">5. El trabajo de cada mes</a>
+  <a href="#periodo">6. Elegir el periodo</a>
+  <a href="#importar">7. Importar resultados</a>
+  <a href="#importar-pdf" class="l2">7.1 PDF del laboratorio</a>
+  <a href="#importar-csv" class="l2">7.2 CSV, JSON o texto pegado</a>
+  <a href="#importar-manual" class="l2">7.3 Registro manual</a>
+  <a href="#demo" class="l2">7.4 Datos de demostración</a>
+  <a href="#revision">8. Revisión de resultados</a>
+  <a href="#incidencias">9. Incidencias y remuestreos</a>
+  <a href="#protocolo">10. Protocolo ante fallo de BSA</a>
+  <a href="#informe">11. Informe mensual</a>
+  <a href="#historico">12. Histórico y análisis evolutivo</a>
+  <a href="#configuracion">13. Configuración</a>
+  <a href="#proyecto">14. Guardar y gestionar el proyecto</a>
+  <a href="#datos">15. Dónde se guardan los datos</a>
+  <a href="#interpretacion">16. Cómo se interpretan los resultados</a>
+  <a href="#problemas">17. Solución de problemas</a>
+  <a href="#glosario">18. Glosario</a>
+  <a href="#limitaciones">19. Avisos y limitaciones</a>
+</nav>
+
+<main class="content">
+
+<section id="que-es">
+  <h2>1. Qué es BSA Manager</h2>
+  <p>BSA Manager es una aplicación web para gestionar los informes de <strong>bioseguridad ambiental</strong> de salas de ambiente controlado hospitalarias (quirófanos, REA, esterilización, endoscopias, etc.).</p>
+  <p>Con ella puede:</p>
+  <ul>
+    <li>Importar los informes del laboratorio (PDF, CSV, JSON o entrada manual).</li>
+    <li>Evaluar automáticamente cada resultado según el nivel de riesgo del punto de muestreo (algoritmo R1–R5).</li>
+    <li>Detectar incidencias y gestionar los remuestreos tras desinfección.</li>
+    <li>Generar el informe mensual e informes históricos evolutivos, imprimibles en PDF.</li>
+    <li>Llevar un archivo histórico con gráficos de evolución.</li>
+  </ul>
+  <div class="alert alert-info">En el código actual, los datos se procesan en el navegador y se guardan localmente en el equipo donde se usa la aplicación; no hay llamadas a servidores externos. Eso sí, es el comportamiento del código tal como está hoy, no una auditoría de privacidad.</div>
+</section>
+
+<section id="antes">
+  <h2>2. Antes de empezar</h2>
+  <ul>
+    <li><strong>Solo necesita un navegador actualizado</strong> (Chrome, Edge o Firefox). No hay que instalar nada.</li>
+    <li>Las librerías que usa (PDF.js para leer PDF y Chart.js para los gráficos) están en la carpeta <code>lib/</code> junto a la aplicación; el código no las descarga de internet.</li>
+    <li>Los datos se guardan en <strong>este navegador y este equipo</strong>. Si cambia de ordenador o de navegador, no verá sus datos salvo que exporte el proyecto (véase la sección 14).</li>
+    <li><strong>Recomendación importante:</strong> descargue el archivo de proyecto (.json) con regularidad como copia de seguridad. Los datos del navegador pueden perderse si se limpian los datos del sitio.</li>
+  </ul>
+</section>
+
+<section id="pantalla">
+  <h2>3. Conocer la pantalla</h2>
+  <p>En la <strong>cabecera</strong> (banda azul superior) encontrará el nombre de la aplicación, un selector de <strong>Mes</strong> y <strong>Año</strong> para cambiar rápidamente el periodo de trabajo, y el nombre del centro y del responsable.</p>
+  <p>Bajo la cabecera está el <strong>menú principal</strong>:</p>
+  <table class="data">
+    <tr><th>Opción de menú</th><th>Para qué sirve</th></tr>
+    <tr><td>Panel de control</td><td>Resumen del periodo: registros, documentos, validados, incidencias y estado general. También el registro de operaciones.</td></tr>
+    <tr><td>Archivos → Importación</td><td>Cargar PDF, CSV o JSON del laboratorio, pegar texto, añadir registros manuales o cargar la demo.</td></tr>
+    <tr><td>Archivos → Revisión de resultados</td><td>Tabla con todos los registros del periodo, su estado y las acciones sobre cada uno.</td></tr>
+    <tr><td>Archivos → Histórico de muestreos</td><td>Archivo de periodos guardados, carga retrospectiva y gráficos evolutivos.</td></tr>
+    <tr><td>Archivos → Gestión de proyecto</td><td>Guardar, descargar, cargar y reiniciar el proyecto; modo solo lectura; privacidad e instrucciones.</td></tr>
+    <tr><td>Informes → Informe mensual</td><td>Generar el informe del periodo, imprimirlo a PDF y exportar los datos.</td></tr>
+    <tr><td>Informes → Informe histórico evolutivo</td><td>Informe consolidado de varios periodos guardados en el histórico.</td></tr>
+    <tr><td>Configuración</td><td>Puntos de muestreo, umbrales de interpretación e identificación del centro.</td></tr>
+    <tr><td>Ayuda</td><td>Resumen rápido de uso dentro de la propia aplicación.</td></tr>
+    <tr><td>Acerca de</td><td>Autoría y versión de la aplicación.</td></tr>
+  </table>
+  <p>En pantallas estrechas (móvil o tablet) el menú se recoge bajo el botón <span class="kbd">☰</span>.</p>
+</section>
+
+<section id="primera-vez">
+  <h2>4. Puesta en marcha inicial (solo la primera vez)</h2>
+  <ol>
+    <li>Abra <strong>Configuración</strong>.</li>
+    <li>En <strong>Hospital / Identificación</strong>, escriba el nombre del centro, el responsable, el tipo de muestra y el área sanitaria.</li>
+    <li>Revise los <strong>puntos de muestreo</strong>: la aplicación trae precargados los 9 puntos del Hospital de Jarrio con su nivel de riesgo, frecuencia y meses de muestreo. Si trabaja en otro centro, añada sus propios puntos (sección 13).</li>
+    <li>Revise los <strong>umbrales de interpretación</strong>. Vienen según el algoritmo del Hospital de Jarrio; no los cambie salvo que disponga de criterios oficiales distintos.</li>
+    <li>Pulse <span class="kbd">Guardar configuración</span>.</li>
+  </ol>
+</section>
+
+<section id="flujo">
+  <h2>5. El trabajo de cada mes (visión general)</h2>
+  <p>El ciclo habitual con cada muestreo mensual es:</p>
+  <div class="paso"><div class="num">1</div><div><strong>Elegir el periodo</strong> (mes y año) en el Panel de control o en la cabecera.</div></div>
+  <div class="paso"><div class="num">2</div><div><strong>Importar los informes del laboratorio</strong> (normalmente un PDF por punto de muestreo).</div></div>
+  <div class="paso"><div class="num">3</div><div><strong>Revisar los resultados</strong>: comprobar los valores extraídos y atender las incidencias.</div></div>
+  <div class="paso"><div class="num">4</div><div>Si hay fallo de bioseguridad por hongos: <strong>activar el protocolo</strong>, registrar el remuestreo y anotar sus resultados cuando lleguen.</div></div>
+  <div class="paso"><div class="num">5</div><div><strong>Generar el informe mensual</strong> y guardarlo en PDF (imprimir) o exportarlo.</div></div>
+  <div class="paso"><div class="num">6</div><div><strong>Guardar el periodo en el histórico</strong> y el proyecto en localStorage o en un archivo .json.</div></div>
+</section>
+
+<section id="periodo">
+  <h2>6. Elegir el periodo</h2>
+  <p>El periodo es el mes del informe sobre el que está trabajando. Puede cambiarlo:</p>
+  <ul>
+    <li>En la <strong>cabecera</strong>: elija Mes y Año; se aplica al instante.</li>
+    <li>En el <strong>Panel de control</strong>: elija Año y Mes y pulse <span class="kbd">Aplicar periodo</span>.</li>
+  </ul>
+  <p>El panel le informará de qué puntos tocan ese mes según el calendario de muestreo configurado (por ejemplo, los puntos trimestrales solo aparecen en sus meses).</p>
+  <div class="alert alert-info"><strong>Detalle importante:</strong> cada registro se asigna a un mes según la <strong>fecha de recogida</strong> del informe, no según el periodo elegido al importar. Si importa un PDF de agosto estando en octubre, el registro se guardará en agosto. El panel le avisará si hay registros en otros periodos.</div>
+</section>
+
+<section id="importar">
+  <h2>7. Importar resultados</h2>
+  <p>En <strong>Archivos → Importación</strong> tiene cuatro vías para meter datos. Tras cada importación aparecerá la tarjeta <strong>Resultado de la importación</strong> con el detalle de lo procesado.</p>
+
+  <h3 id="importar-pdf">7.1 PDF del laboratorio</h3>
+  <p>Es la vía habitual. Arrastre los PDF a la zona de arrastre o haga clic para seleccionarlos (puede cargar varios a la vez; lo normal es <strong>un PDF por punto de muestreo</strong>).</p>
+  <p>La aplicación lee el texto del PDF en su propio navegador (con PDF.js, librería local) y extrae automáticamente:</p>
+  <ul>
+    <li>Denominación (punto de muestreo) — primero lo intenta por el nombre del archivo, luego por el contenido.</li>
+    <li>Aerobios mesófilos (ufc/m³), Hongos no patógenos y Hongos patógenos.</li>
+    <li>Fecha de recogida y número de informe.</li>
+  </ul>
+  <div class="alert alert-warning"><strong>Revise siempre los datos extraídos</strong> en la pestaña Revisión. La lectura automática depende de cómo esté maquetado el PDF: un documento escaneado como imagen (sin texto seleccionable) no se puede leer, y un formato nuevo del laboratorio puede dar valores erróneos. En esos casos use el registro manual o el pegado de texto.</div>
+
+  <h3 id="importar-csv">7.2 CSV, JSON o texto pegado</h3>
+  <p>Puede arrastrar un archivo <code>.csv</code>, <code>.json</code> o <code>.txt</code>, o pulsar <span class="kbd">Pegar CSV / texto</span> y copiar el contenido directamente. El formato esperado (separado por punto y coma) es:</p>
+  <pre>punto;nivelRiesgo;aerobios;hongosNP;hongosPat;fechaRecogida
+Quirófano 1;Alto. R4;2;No detectado;No detectado;2026-08-25</pre>
+  <ul>
+    <li>En hongos puede escribir un número o <code>No detectado</code>.</li>
+    <li>La fecha admite formato <code>AAAA-MM-DD</code> o <code>DD/MM/AAAA</code>.</li>
+    <li>Si un punto no se reconoce por nombre, la aplicación intenta asociarlo por coincidencia parcial (por ejemplo, «REA Control» con «REA Box Control»).</li>
+  </ul>
+
+  <h3 id="importar-manual">7.3 Registro manual</h3>
+  <p>Pulse <span class="kbd">Añadir registro manual</span> y cubra el formulario:</p>
+  <ul>
+    <li><strong>Punto de recogida</strong>: el nivel de riesgo se rellena solo según la configuración.</li>
+    <li>Valores de aerobios mesófilos, hongos no patógenos y hongos patógenos.</li>
+    <li><strong>Tipo de muestreo</strong>: <em>Programado</em> (el del calendario mensual) o <em>Remuestreo</em> (tras una desinfección). Si es remuestreo, indique el motivo.</li>
+    <li>Fecha de recogida y observaciones.</li>
+  </ul>
+  <p>Termine con <span class="kbd">Guardar registro</span>.</p>
+
+  <h3 id="demo">7.4 Datos de demostración</h3>
+  <p>El botón <span class="kbd">Cargar datos de demostración</span> carga los 6 informes de ejemplo de agosto de 2026, que incluyen una incidencia por hongo patógeno para practicar el protocolo y el remuestreo.</p>
+  <div class="alert alert-warning">La demo sirve para aprender y para enseñar la aplicación. Antes de trabajar con datos reales, elimine los registros de prueba (botón <span class="kbd">Vaciar datos</span> en Revisión o elimine los registros uno a uno).</div>
+</section>
+
+<section id="revision">
+  <h2>8. Revisión de resultados</h2>
+  <p>En <strong>Archivos → Revisión de resultados</strong> verá la tabla de registros del periodo con estas columnas: Tipo, Punto, Riesgo, Fecha, Aerobios, Hongos N.P., Hongos Pat., Estado, Origen y Acciones.</p>
+  <p>Cada registro recibe automáticamente un <strong>estado</strong> según los umbrales configurados:</p>
+  <ul>
+    <li><span class="estado ok">Validado</span> Cumple los criterios de su nivel de riesgo.</li>
+    <li><span class="estado inc">Incidencia</span> Supera algún límite (aerobios, hongos no patógenos o patógenos).</li>
+    <li><span class="estado pen">Pendiente</span> Falta información o está a la espera de resultados (por ejemplo, un remuestreo aún sin informe).</li>
+  </ul>
+  <p>Arriba tiene filtros por texto (punto), por estado y por tipo (programados / remuestreos). En la columna <strong>Acciones</strong>:</p>
+  <ul>
+    <li><span class="kbd">Reval.</span> vuelve a evaluar el registro con los umbrales actuales (útil tras cambiar la configuración).</li>
+    <li><span class="kbd">X</span> elimina el registro (pide confirmación).</li>
+    <li><span class="kbd">Remuestreo</span> aparece solo en incidencias por hongos y crea el remuestreo (sección 9).</li>
+  </ul>
+  <div class="alert alert-danger"><strong>Si hay incidencias</strong>, el Panel de control mostrará el estado «Incidencias» y una alerta roja. Revíselas antes de emitir el informe definitivo.</div>
+</section>
+
+<section id="incidencias">
+  <h2>9. Incidencias y remuestreos</h2>
+  <p><strong>Cuándo hace falta remuestreo:</strong> cuando un muestreo programado incumple por <strong>hongos</strong> (no patógenos por encima del umbral de su riesgo, o cualquier hongo patógeno detectado). El protocolo de desinfección se activa por hongos; un exceso de aerobios mesófilos por sí solo no obliga a remuestreo según este criterio.</p>
+  <p><strong>Cómo registrarlo:</strong></p>
+  <ol>
+    <li>En Revisión, pulse <span class="kbd">Remuestreo</span> en la fila de la incidencia.</li>
+    <li>Se crea un registro de tipo <em>Remuestreo</em> en estado <span class="estado pen">Pendiente</span>, con el motivo ya anotado. La aplicación evita duplicados: si ya hay un remuestreo pendiente para ese punto, le preguntará antes de crear otro.</li>
+    <li>Realizada la desinfección y tomada la nueva muestra, cuando llegue el informe del laboratorio importe su PDF o edite los valores, marcando el tipo <em>Remuestreo</em>.</li>
+    <li>Si el remuestreo cumple, queda <span class="estado ok">Validado</span> y se anota «Remuestreo conforme tras desinfección». El ciclo queda cerrado.</li>
+  </ol>
+  <div class="alert alert-info">El remuestreo se asigna al <strong>periodo de la incidencia original</strong>, aunque se recoja al mes siguiente, para que el informe mensual cuadre.</div>
+  <p>El contador de la tabla le avisará de los remuestreos pendientes de resolver.</p>
+</section>
+
+<section id="protocolo">
+  <h2>10. Protocolo ante fallo de BSA (checklist)</h2>
+  <p>Bajo la tabla de Revisión está el <strong>checklist del protocolo</strong>, con los pasos de actuación ante un fallo de bioseguridad:</p>
+  <ol>
+    <li>Calidad notificada / activación del plan de limpieza y desinfección.</li>
+    <li>Notificación a Gerencia, Dirección asistencial, Enfermería y Gestión.</li>
+    <li>Coordinadora del área quirúrgica / Supervisora UVI-REA informadas.</li>
+    <li>Notificación urgente a Lacera (empresa de desinfección).</li>
+    <li>Inicio de la triple desinfección (hipoclorito 1:9, intervalos ≥ 90 min, más NDP Air Total+).</li>
+    <li>Reajuste o suspensión de la actividad asistencial (previsión 24-48 h).</li>
+    <li>Triple desinfección finalizada.</li>
+    <li>Solicitud de remuestreo al laboratorio.</li>
+    <li>Resultados del remuestreo recibidos y conformes.</li>
+  </ol>
+  <p>Marque cada paso al completarlo; el seguimiento se incluirá como anexo en el informe mensual. El botón <span class="kbd">Reiniciar checklist</span> lo deja a cero para la siguiente incidencia.</p>
+  <div class="alert alert-warning">Este checklist reproduce el procedimiento que la aplicación trae configurado (el del Hospital de Jarrio). Es una ayuda de seguimiento dentro de la app: no es un protocolo clínico validado por esta herramienta. Si usa la aplicación en otro centro, adapte el procedimiento al suyo.</div>
+</section>
+
+<section id="informe">
+  <h2>11. Informe mensual</h2>
+  <p>En <strong>Informes → Informe mensual</strong>:</p>
+  <ol>
+    <li>Pulse <span class="kbd">Generar / Actualizar informe</span>. Se construye el documento con los datos del periodo activo.</li>
+    <li>Revíselo en pantalla. Incluye: resultados de los muestreos programados y de los remuestreos, los criterios de interpretación aplicados (algoritmo del Hospital de Jarrio, con referencia a UNE 171340), los anexos normativos, el seguimiento del protocolo si hubo incidencias y el flujograma de bioseguridad.</li>
+    <li>Pulse <span class="kbd">Imprimir / PDF</span> para sacarlo por el diálogo de impresión del navegador (elija «Guardar como PDF» para archivarlo o enviarlo).</li>
+    <li>Si lo necesita, exporte los datos con <span class="kbd">Exportar CSV</span> u <span class="kbd">Exportar JSON datos</span>.</li>
+  </ol>
+  <div class="alert alert-warning">Si el periodo tiene incidencias sin resolver o remuestreos pendientes, el informe lo indicará. Resuélvalos antes de emitir la versión definitiva.</div>
+</section>
+
+<section id="historico">
+  <h2>12. Histórico y análisis evolutivo</h2>
+  <p>En <strong>Archivos → Histórico de muestreos</strong>:</p>
+  <ul>
+    <li><span class="kbd">Guardar periodo actual en histórico</span>: archiva el mes terminado en IndexedDB (almacenamiento persistente del navegador). Hágalo al cerrar cada informe mensual.</li>
+    <li><span class="kbd">Cargar datos retrospectivos (JSON)</span>: incorpora periodos anteriores desde archivos JSON, para construir la historia del centro.</li>
+    <li><span class="kbd">Exportar histórico completo</span>: descarga todo el archivo en JSON (copia de seguridad).</li>
+    <li><span class="kbd">Vaciar histórico</span>: lo borra por completo (pide confirmación; no se puede deshacer).</li>
+  </ul>
+  <p>La tabla de <strong>Periodos almacenados</strong> resume cada mes (puntos, válidos, incidencias) y permite cargarlo de nuevo o eliminarlo.</p>
+  <h3>Gráficos evolutivos</h3>
+  <p>Elija el rango (Desde / Hasta) y, si quiere, un punto concreto, y pulse <span class="kbd">Actualizar gráficos</span>. Verá la evolución de aerobios mesófilos (ufc/m³) y el porcentaje de cumplimiento de bioseguridad por mes.</p>
+  <h3>Informe histórico evolutivo</h3>
+  <p>En <strong>Informes → Informe histórico evolutivo</strong>, seleccione el rango de meses y pulse <span class="kbd">Generar informe histórico</span>: obtendrá un documento consolidado con los resultados por periodo y el análisis evolutivo, imprimible en PDF.</p>
+</section>
+
+<section id="configuracion">
+  <h2>13. Configuración</h2>
+  <h3>Puntos de muestreo</h3>
+  <p>La tabla muestra cada punto con su nivel de riesgo, frecuencia (mensual o trimestral) y meses de muestreo. Los 9 puntos precargados son los del Hospital de Jarrio y son editables.</p>
+  <h3>Añadir un punto nuevo</h3>
+  <ol>
+    <li>Elija el <strong>Área</strong> y después el <strong>Tipo de instalación</strong> (catálogo según la Tabla 1 de la norma UNE 171340:2020). El nivel de riesgo se asigna automáticamente.</li>
+    <li>Escriba el nombre del punto (por ejemplo, «Quirófano 4»), la frecuencia y los meses de muestreo separados por comas (1-12).</li>
+    <li>Pulse <span class="kbd">Añadir punto de muestreo</span>.</li>
+  </ol>
+  <h3>Umbrales y reglas de interpretación</h3>
+  <p>Son los límites del algoritmo con los que se evalúa cada registro (véase la tabla de la sección 16). Puede modificarlos y guardarlos con <span class="kbd">Guardar configuración</span>, o volver a los valores del algoritmo con <span class="kbd">Restablecer valores del algoritmo</span>.</p>
+  <div class="alert alert-warning">No invente umbrales: use los del diagrama de flujo oficial de su centro. Los umbrales configurados no constituyen certificación normativa.</div>
+  <h3>Hospital / Identificación</h3>
+  <p>Nombre del centro, responsable, tipo de muestra y área sanitaria: aparecen en la cabecera y en los informes.</p>
+</section>
+
+<section id="proyecto">
+  <h2>14. Guardar y gestionar el proyecto</h2>
+  <p>En <strong>Archivos → Gestión de proyecto</strong>:</p>
+  <ul>
+    <li><span class="kbd">Guardar proyecto (localStorage)</span>: guarda todo el trabajo en el navegador. La próxima vez que abra la aplicación se restaurará automáticamente.</li>
+    <li><span class="kbd">Descargar archivo .json</span>: descarga el proyecto completo. Es su copia de seguridad portable: hágala con regularidad.</li>
+    <li><span class="kbd">Cargar desde archivo</span>: restaura un .json previamente descargado (por ejemplo, al cambiar de equipo).</li>
+    <li><span class="kbd">Modo solo lectura</span>: bloquea la edición para evitar cambios accidentales en una reunión o al enseñar la aplicación en una tablet. Vuelva a pulsarlo para reactivar la edición.</li>
+    <li><span class="kbd">Reiniciar proyecto (borrar todo)</span>: elimina registros, checklist, informe, localStorage y todo el histórico. Pide confirmación y no se puede deshacer.</li>
+  </ul>
+</section>
+
+<section id="datos">
+  <h2>15. Dónde se guardan los datos (privacidad)</h2>
+  <ul>
+    <li>En el código actual, todo se procesa y almacena <strong>localmente en su navegador</strong>: el proyecto en localStorage y el histórico en IndexedDB. No hay servidor, cuentas de usuario ni envío de datos en el código.</li>
+    <li>La importación de PDF se hace en el propio navegador con la librería local PDF.js; los archivos no salen del equipo.</li>
+    <li><strong>Límites prácticos:</strong> los datos pueden perderse si limpia los datos de navegación del sitio, desinstala el navegador o cambia de dispositivo. Por eso es importante descargar el proyecto (.json) y exportar el histórico como copias de seguridad periódicas.</li>
+    <li>Al ser local, cada navegador/equipo tiene sus propios datos: para mover el trabajo de un equipo a otro, descargue el .json en uno y cárguelo en el otro.</li>
+  </ul>
+</section>
+
+<section id="interpretacion">
+  <h2>16. Cómo se interpretan los resultados</h2>
+  <p>Cada registro se compara con los límites de su nivel de riesgo. Estos son los <strong>valores por defecto configurados en la aplicación</strong> (la app los denomina «algoritmo Hospital de Jarrio», con referencia a la norma UNE 171340:2020):</p>
+  <table class="data">
+    <tr><th>Nivel de riesgo</th><th>Aerobios mesófilos (ufc/m³)</th><th>Hongos no patógenos</th><th>Hongos patógenos</th></tr>
+    <tr><td>Muy alto (R5)</td><td>&lt; 5</td><td>Ausencia</td><td>Ausencia</td></tr>
+    <tr><td>Alto (R4)</td><td>&lt; 10</td><td>Ausencia</td><td>Ausencia</td></tr>
+    <tr><td>Medio (R3)</td><td>&lt; 150</td><td>Ausencia</td><td>Ausencia</td></tr>
+    <tr><td>Moderado (R2)</td><td>&lt; 200</td><td>&lt; 10</td><td>Ausencia</td></tr>
+    <tr><td>Ligero (R1)</td><td>&lt; 200</td><td>&lt; 25</td><td>Ausencia</td></tr>
+  </table>
+  <ul>
+    <li>Un valor <strong>igual o superior</strong> al límite se considera incumplimiento.</li>
+    <li>«Ausencia» significa que cualquier detección es incidencia.</li>
+    <li>El incumplimiento por hongos (patógenos o no patógenos) activa la necesidad de remuestreo tras desinfección.</li>
+    <li>Los remuestreos conformes cierran el ciclo de la incidencia.</li>
+  </ul>
+  <div class="alert alert-info">Son parámetros configurables (sección 13), no reglas clínicas validadas por la aplicación ni certificación normativa. La interpretación automática es una ayuda al trabajo diario; no sustituye el juicio del responsable. Si su centro actualiza sus criterios oficiales, ajuste los umbrales en Configuración.</div>
+</section>
+
+<section id="problemas">
+  <h2>17. Solución de problemas</h2>
+  <h3>Un PDF no se importa o los datos salen mal</h3>
+  <ul>
+    <li>Compruebe que el PDF tiene texto seleccionable (no es una foto escaneada). Si no lo tiene, use el registro manual.</li>
+    <li>Revise el registro en Revisión y corríjalo con <span class="kbd">X</span> + nuevo registro manual si fuera necesario.</li>
+  </ul>
+  <h3>Importé datos pero el panel aparece vacío</h3>
+  <p>Cada registro se guarda en el mes de su fecha de recogida. Cambie el periodo al mes correcto (cabecera o Panel de control). El resumen de validación le avisa si hay registros en otros periodos.</p>
+  <h3>Cerré el navegador y perdí el trabajo</h3>
+  <p>El trabajo solo se recupera automáticamente si pulsó <span class="kbd">Guardar proyecto (localStorage)</span>. Si descargó el archivo .json, cárguelo desde Gestión de proyecto. Acostúmbrese a guardar antes de cerrar.</p>
+  <h3>Cambié los umbrales y quiero reevaluar los registros</h3>
+  <p>Use el botón <span class="kbd">Reval.</span> de cada registro en Revisión, o <span class="kbd">Actualizar</span> para refrescar la tabla.</p>
+  <h3>Quiero empezar de cero</h3>
+  <p><span class="kbd">Vaciar datos</span> en Revisión elimina los registros cargados. <span class="kbd">Reiniciar proyecto</span> en Gestión de proyecto borra todo, incluido el histórico.</p>
+</section>
+
+<section id="glosario">
+  <h2>18. Glosario</h2>
+  <table class="data">
+    <tr><th>Término</th><th>Significado</th></tr>
+    <tr><td>BSA</td><td>Bioseguridad ambiental: control microbiológico del ambiente en salas de ambiente controlado.</td></tr>
+    <tr><td>ufc/m³</td><td>Unidades formadoras de colonias por metro cúbico de aire.</td></tr>
+    <tr><td>Aerobios mesófilos</td><td>Recuento general de microorganismos aerobios del aire.</td></tr>
+    <tr><td>Hongos N.P.</td><td>Hongos no patógenos (mohos y levaduras ambientales).</td></tr>
+    <tr><td>Hongos patógenos</td><td>Hongos con potencial patógeno (por ejemplo, <em>Aspergillus</em>); siempre deben estar ausentes.</td></tr>
+    <tr><td>Periodo</td><td>Mes y año del informe en curso.</td></tr>
+    <tr><td>Remuestreo</td><td>Nueva toma de muestra tras la desinfección por una incidencia de hongos.</td></tr>
+    <tr><td>UNE 171340:2020</td><td>Norma española sobre validación y control de salas de ambiente controlado; base de los niveles de riesgo R1-R5.</td></tr>
+    <tr><td>localStorage / IndexedDB</td><td>Almacenes internos del navegador donde la aplicación guarda el proyecto y el histórico, respectivamente.</td></tr>
+  </table>
+</section>
+
+<section id="limitaciones">
+  <h2>19. Avisos y limitaciones</h2>
+  <ul>
+    <li>La aplicación <strong>no está validada clínicamente ni certificada</strong>.</li>
+    <li>Los umbrales de interpretación son configurables y <strong>no constituyen certificación normativa</strong>; use los del procedimiento oficial de su centro.</li>
+    <li>La extracción automática de datos desde PDF debe revisarse antes de emitir informes.</li>
+    <li>El PDF de los informes se genera mediante el diálogo de impresión del navegador.</li>
+    <li>Los datos locales pueden perderse al limpiar datos del sitio o cambiar de dispositivo: haga copias de seguridad.</li>
+    <li>Es una herramienta de apoyo a la gestión; no sustituye el criterio del responsable de bioseguridad ni los procedimientos oficiales del centro.</li>
+  </ul>
+</section>
+
+</main>
+</div>
+
+<footer class="manual-footer">
+  BSA Manager · Manual de usuario · Dr. José Manuel Fernández Carreira · v1.2 · 2026 · <a href="./index.html">Volver a la aplicación</a>
+</footer>
+
+</body>
+</html>
