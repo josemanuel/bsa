@@ -1,0 +1,25 @@
+{
+  "name": "BSA Manager — Bioseguridad Ambiental",
+  "short_name": "BSA Manager",
+  "description": "Gestión local de informes de bioseguridad ambiental en salas de ambiente controlado",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f7f9",
+  "theme_color": "#0d4f6b",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "docs/logo_sespa.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "docs/logo_sespa.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

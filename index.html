@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0d4f6b">
+  <meta name="mobile-web-app-capable" content="yes">
   <title>BSA Manager – Gestión de Informes de Bioseguridad Ambiental</title>
   <script src="lib/pdf.min.js"></script>
   <script src="lib/chart.umd.min.js"></script>
@@ -575,7 +578,7 @@
     <div class="nav-item" data-menu="informacion">
       <button type="button" class="nav-btn" data-dropdown="informacion">Información <span class="caret">▾</span></button>
       <div class="dropdown">
-        <a href="ayuda.html" target="_blank" rel="noopener">Manual de usuario (Ayuda)</a>
+        <button type="button" id="btnManualAyuda">Manual de usuario</button>
         <button type="button" id="btnAbout" data-modal="about">Acerca de</button>
       </div>
     </div>
@@ -936,6 +939,8 @@
         <div class="btn-group">
           <button class="btn btn-primary" id="btnSaveConfig">Guardar configuración</button>
           <button class="btn btn-secondary" id="btnResetConfig">Restablecer valores del algoritmo</button>
+          <button class="btn btn-secondary" id="btnLoadJarrioTemplate">Cargar plantilla puntos Jarrio</button>
+          <button class="btn btn-secondary" id="btnClearPoints">Vaciar puntos de muestreo</button>
         </div>
       </div>
 
@@ -1010,6 +1015,9 @@
           <div style="display:flex;align-items:flex-end;">
             <button class="btn btn-success" id="btnPrintHistReport">Imprimir / PDF</button>
           </div>
+          <div style="display:flex;align-items:flex-end;">
+            <button class="btn btn-secondary" id="btnExportHistCSV">Exportar CSV (plantilla anual)</button>
+          </div>
         </div>
       </div>
       <div id="histReportPreview" style="background:#fff;border:1px solid var(--border);padding:1.5rem;max-width:900px;margin:0 auto;box-shadow:var(--shadow);">
@@ -1039,6 +1047,7 @@
           <span class="leg leg-bad"></span> Incidencia
           <span class="leg leg-pend"></span> Pendiente / sin datos
           <span class="leg leg-rem"></span> Remuestreo
+          · El valor numérico junto a cada punto son los <strong>aerobios mesófilos</strong> (ufc/m³)
         </div>
         <div class="year-grid" id="yearGrid"></div>
       </div>
@@ -1170,6 +1179,43 @@
   </main>
 
   
+
+  
+  <!-- Modal vincular remuestreo -->
+  <div class="modal-overlay no-print" id="modalRemLink">
+    <div class="modal-box" style="max-width:520px;">
+      <button type="button" class="modal-close" id="btnRemLinkClose">&times;</button>
+      <h2>Vincular remuestreo</h2>
+      <p id="remLinkIntro" style="font-size:0.9rem;margin:0.5rem 0;"></p>
+      <div id="remLinkList" style="max-height:220px;overflow-y:auto;margin:0.6rem 0;"></div>
+      <div style="margin-top:0.5rem;">
+        <label for="remLinkPeriod">Periodo del muestreo fallido (AAAA-MM)</label>
+        <input type="text" id="remLinkPeriod" placeholder="2026-06">
+      </div>
+      <label style="display:flex;align-items:center;gap:0.4rem;margin:0.75rem 0;font-size:0.9rem;">
+        <input type="checkbox" id="remLinkApplyBatch" checked>
+        Aplicar el mismo periodo a los demás remuestreos de este lote
+      </label>
+      <div class="btn-group">
+        <button type="button" class="btn btn-primary" id="btnRemLinkOk">Confirmar vínculo</button>
+        <button type="button" class="btn btn-secondary" id="btnRemLinkCancel">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+<div class="modal-overlay no-print" id="modalWelcome">
+    <div class="modal-box" style="max-width:520px;">
+      <h2>Configuración inicial del centro</h2>
+      <p style="font-size:0.9rem;">La aplicación no asume un hospital concreto. Elija cómo empezar:</p>
+      <div class="btn-group" style="flex-direction:column;align-items:stretch;gap:0.5rem;margin-top:1rem;">
+        <button type="button" class="btn btn-primary" id="btnWelcomeJarrio">Usar plantilla Hospital de Jarrio (9 puntos)</button>
+        <button type="button" class="btn btn-secondary" id="btnWelcomeEmpty">Empezar sin puntos (otro centro)</button>
+      </div>
+      <p style="font-size:0.8rem;color:var(--muted);margin-top:0.8rem;">Podrá cambiarlo después en Configuración.</p>
+    </div>
+  </div>
+
+  <!-- Modal Acerca de
   <!-- Modal Acerca de (incluye resumen funcional antes en Ayuda) -->
   <div class="modal-overlay no-print" id="modalAbout">
     <div class="modal-box" style="max-width:560px;">
@@ -1517,7 +1563,7 @@
     month: String(_now.getMonth() + 1).padStart(2, "0"),
     records: [],
     documents: [],
-    points: JSON.parse(JSON.stringify(DEFAULT_POINTS)),
+    points: [],  // se cargan plantilla Jarrio o vacía en primer arranque / localStorage
     config: {
       // Umbrales según algoritmo de bioseguridad Hospital de Jarrio
       thrR4: 10,          // Mesófilos <10  (Quirófanos implantes)
@@ -1529,10 +1575,11 @@
       thrHongosR2: 10,    // <10
       thrHongosR1: 25,    // <25
       thrHongosPat: 0,    // Ausencia siempre
-      hospital: "Hospital de Jarrio",
+      hospital: "",
+      plantillaCentro: "",
       responsable: "",
       tipoMuestra: "Aire de ambiente interior",
-      areaSanitaria: "Área Sanitaria I",
+      areaSanitaria: "",
       logoPath: "docs/logo_sespa.png"
     },
     log: [],
@@ -1976,6 +2023,9 @@
     document.querySelectorAll(".modal-overlay").forEach(m => m.classList.remove("show"));
   }
   document.getElementById("btnAbout")?.addEventListener("click", () => openModal("modalAbout"));
+  document.getElementById("btnManualAyuda")?.addEventListener("click", function () {
+    window.open("ayuda.html", "_blank", "noopener");
+  });
   document.querySelectorAll("[data-close-modal]").forEach(b => b.addEventListener("click", closeModals));
   document.querySelectorAll(".modal-overlay").forEach(ov => {
     ov.addEventListener("click", (e) => { if (e.target === ov) closeModals(); });
@@ -2219,83 +2269,149 @@
    * Auto-elige si el punto coincide de forma unívoca (permite lotes sin placeholder previo).
    * Solo pregunta si hay ambigüedad o no hay candidatos.
    */
+  // Estado de lote para no preguntar en cada PDF de remuestreo
+  var _remBatchLink = null; // { periodoIncidencia, applyBatch }
+
+  function openModalId(id) {
+    var m = document.getElementById(id);
+    if (m) m.classList.add("show");
+  }
+  function closeModalId(id) {
+    var m = document.getElementById(id);
+    if (m) m.classList.remove("show");
+  }
+
+  /**
+   * Modal (no prompt) para vincular remuestreo.
+   * Auto-resuelve si el punto coincide de forma unívoca.
+   * Soporta "aplicar al resto del lote".
+   * @returns {Promise<object|null>}
+   */
   function askRemuestreoLink(puntoDetectado, fechaRem) {
-    var cands = listIncidenciaCandidates(puntoDetectado);
-    function pack(chosen) {
-      ensureRecordPeriodo(chosen);
-      return {
-        periodoIncidencia: chosen.periodo || periodKey(),
-        punto: chosen.punto,
-        motivo: chosen.motivoRemuestreoSugerido || (chosen._issues && chosen._issues.join("; ")) || "Tras incumplimiento"
-      };
-    }
-    // 1) Mismo punto: auto si hay uno; si hay varios, el de fecha más cercana anterior
-    var same = cands.filter(function (c) { return puntoDetectado && c.punto === puntoDetectado; });
-    if (same.length === 1) {
-      log("Remuestreo auto-vinculado a " + same[0].punto + " · " + same[0].periodo);
-      return pack(same[0]);
-    }
-    if (same.length > 1) {
-      same.sort(function (a, b) {
-        return String(b.fechaRecogida || "").localeCompare(String(a.fechaRecogida || ""));
-      });
-      // Preferir el más reciente no posterior a la fecha del remuestreo
-      var chosen = same[0];
-      if (fechaRem) {
-        for (var i = 0; i < same.length; i++) {
-          if (!same[i].fechaRecogida || same[i].fechaRecogida <= fechaRem) { chosen = same[i]; break; }
-        }
+    return new Promise(function (resolve) {
+      var cands = listIncidenciaCandidates(puntoDetectado);
+
+      function pack(chosen, periodoOverride) {
+        if (chosen) ensureRecordPeriodo(chosen);
+        return {
+          periodoIncidencia: periodoOverride || (chosen && chosen.periodo) || periodKey(),
+          punto: (chosen && chosen.punto) || puntoDetectado || "",
+          motivo: (chosen && (chosen.motivoRemuestreoSugerido || (chosen._issues && chosen._issues.join("; ")))) || "Tras incumplimiento"
+        };
       }
-      log("Remuestreo auto-vinculado (varios candidatos mismo punto) a " + chosen.punto + " · " + chosen.periodo);
-      return pack(chosen);
-    }
-    // 2) Sin coincidencia de punto pero una sola incidencia abierta → usar esa
-    if (cands.length === 1) {
-      log("Remuestreo auto-vinculado a única incidencia: " + cands[0].punto + " · " + cands[0].periodo);
-      return pack(cands[0]);
-    }
-    // 3) Sin incidencias: pedir periodo manual (no hace falta placeholder previo)
-    if (!cands.length) {
+
+      // Lote: reutilizar periodo elegido
+      if (_remBatchLink && _remBatchLink.applyBatch && _remBatchLink.periodoIncidencia) {
+        var sameP = cands.filter(function (c) { return puntoDetectado && c.punto === puntoDetectado; });
+        var ch = sameP[0] || cands[0] || null;
+        var linked = pack(ch, _remBatchLink.periodoIncidencia);
+        if (puntoDetectado) linked.punto = puntoDetectado;
+        log("Remuestreo (lote) → periodo " + linked.periodoIncidencia + " · " + linked.punto);
+        resolve(linked);
+        return;
+      }
+
+      // Auto: mismo punto unívoco
+      var same = cands.filter(function (c) { return puntoDetectado && c.punto === puntoDetectado; });
+      if (same.length === 1) {
+        var auto = pack(same[0]);
+        log("Remuestreo auto-vinculado a " + auto.punto + " · " + auto.periodoIncidencia);
+        resolve(auto);
+        return;
+      }
+      if (same.length > 1) {
+        same.sort(function (a, b) {
+          return String(b.fechaRecogida || "").localeCompare(String(a.fechaRecogida || ""));
+        });
+        var chosen = same[0];
+        if (fechaRem) {
+          for (var i = 0; i < same.length; i++) {
+            if (!same[i].fechaRecogida || same[i].fechaRecogida <= fechaRem) { chosen = same[i]; break; }
+          }
+        }
+        var auto2 = pack(chosen);
+        log("Remuestreo auto-vinculado (varios) a " + auto2.punto + " · " + auto2.periodoIncidencia);
+        resolve(auto2);
+        return;
+      }
+      if (cands.length === 1) {
+        var auto3 = pack(cands[0]);
+        log("Remuestreo auto-vinculado a única incidencia: " + auto3.punto);
+        resolve(auto3);
+        return;
+      }
+
+      // Modal para ambigüedad o sin candidatos
+      var intro = document.getElementById("remLinkIntro");
+      var list = document.getElementById("remLinkList");
+      var periodInp = document.getElementById("remLinkPeriod");
+      var batchChk = document.getElementById("remLinkApplyBatch");
+      if (!intro || !list) {
+        resolve(null);
+        return;
+      }
+      intro.textContent = "Remuestreo de «" + (puntoDetectado || "?") + "» (recogida " + (fechaRem || "?") + "). Elija el muestreo programado con incidencia al que corresponde.";
+      list.innerHTML = "";
       var sug = periodKey();
-      // Sugerir mes anterior si la recogida es a primeros de mes
       if (fechaRem && /^\d{4}-\d{2}/.test(fechaRem)) {
         var y = parseInt(fechaRem.slice(0, 4), 10);
         var m = parseInt(fechaRem.slice(5, 7), 10) - 1;
         if (m < 1) { m = 12; y--; }
         sug = y + "-" + String(m).padStart(2, "0");
       }
-      var ans = prompt(
-        "REMUESTREO de «" + (puntoDetectado || "?") + "» (recogida " + (fechaRem || "?") + ")\n\n" +
-        "No hay muestreos con incidencia en memoria para ese punto.\n" +
-        "Indique el periodo del muestreo fallido (AAAA-MM):",
-        sug
-      );
-      if (!ans) return null;
-      return {
-        periodoIncidencia: ans.trim(),
-        punto: puntoDetectado || "",
-        motivo: "Remuestreo tras desinfección"
+      if (cands.length) {
+        cands.forEach(function (c, i) {
+          var id = "remCand" + i;
+          var lab = document.createElement("label");
+          lab.style.display = "flex";
+          lab.style.gap = "0.4rem";
+          lab.style.alignItems = "flex-start";
+          lab.style.margin = "0.35rem 0";
+          lab.style.fontSize = "0.88rem";
+          lab.innerHTML = '<input type="radio" name="remCand" value="' + i + '"' + (i === 0 ? " checked" : "") + '> ' +
+            "<span><strong>" + esc(c.punto) + "</strong> · " + esc(c.periodo || "") + " · " + esc(c.fechaRecogida || "") +
+            (c._issues && c._issues[0] ? "<br><span style='color:var(--muted)'>" + esc(c._issues[0]) + "</span>" : "") + "</span>";
+          lab.querySelector("input").addEventListener("change", function () {
+            periodInp.value = cands[parseInt(this.value, 10)].periodo || sug;
+          });
+          list.appendChild(lab);
+        });
+        periodInp.value = cands[0].periodo || sug;
+      } else {
+        list.innerHTML = '<p style="font-size:0.88rem;color:var(--muted);">No hay incidencias en memoria. Indique manualmente el periodo del muestreo fallido.</p>';
+        periodInp.value = sug;
+      }
+      if (batchChk) batchChk.checked = true;
+
+      function cleanup() {
+        document.getElementById("btnRemLinkOk").onclick = null;
+        document.getElementById("btnRemLinkCancel").onclick = null;
+        document.getElementById("btnRemLinkClose").onclick = null;
+        closeModalId("modalRemLink");
+      }
+
+      document.getElementById("btnRemLinkOk").onclick = function () {
+        var periodo = (periodInp.value || "").trim();
+        if (!/^\d{4}-\d{2}$/.test(periodo)) {
+          alert("Indique un periodo válido AAAA-MM");
+          return;
+        }
+        var sel = list.querySelector('input[name="remCand"]:checked');
+        var chosen = sel ? cands[parseInt(sel.value, 10)] : null;
+        var linked = pack(chosen, periodo);
+        if (puntoDetectado) linked.punto = puntoDetectado;
+        if (batchChk && batchChk.checked) {
+          _remBatchLink = { periodoIncidencia: periodo, applyBatch: true };
+        }
+        cleanup();
+        resolve(linked);
       };
-    }
-    // 4) Varios puntos distintos: preguntar
-    var lines = cands.map(function (c, i) {
-      return (i + 1) + ") " + c.punto + " · " + (c.periodo || "") + " · recogida " + (c.fechaRecogida || "") +
-        (c._issues && c._issues.length ? " · " + c._issues[0] : "");
+      document.getElementById("btnRemLinkCancel").onclick = function () { cleanup(); resolve(null); };
+      document.getElementById("btnRemLinkClose").onclick = function () { cleanup(); resolve(null); };
+      openModalId("modalRemLink");
     });
-    var pick = prompt(
-      "REMUESTREO («" + (puntoDetectado || "?") + "», " + (fechaRem || "?") + ")\n\n" +
-      "¿A qué muestreo programado corresponde?\n\n" + lines.join("\n") +
-      "\n\nEscriba el número (1–" + cands.length + "):",
-      "1"
-    );
-    if (pick === null) return null;
-    var idx = parseInt(pick, 10) - 1;
-    if (isNaN(idx) || idx < 0 || idx >= cands.length) {
-      alert("Selección no válida.");
-      return null;
-    }
-    return pack(cands[idx]);
   }
+
 
   // Configurar worker de PDF.js (local)
   if (typeof pdfjsLib !== "undefined") {
@@ -2341,6 +2457,7 @@
     const before = state.records.length;
     const results = []; // { name, status, punto, aerobios, hongosNP, hongosPat, estado, issues, error }
     tipoForzado = tipoForzado || "programado";
+    if (tipoForzado === "remuestreo") _remBatchLink = null;
     log("Importación como " + (tipoForzado === "remuestreo" ? "REMUESTREO" : "muestreo PROGRAMADO"));
 
     for (const f of Array.from(files)) {
@@ -2351,9 +2468,9 @@
           const buffer = await f.arrayBuffer();
           const text = await extractTextFromPDF(buffer);
           log("PDF leído: " + name + " (" + text.length + " caracteres de texto)");
-          const n = tryParseLabReport(text, name, { tipoForzado: tipoForzado });
+          const n = await tryParseLabReport(text, name, { tipoForzado: tipoForzado });
           if (!n) {
-            try { importCSV(text, name, tipoForzado); } catch (e2) {
+            try { await importCSV(text, name, tipoForzado); } catch (e2) {
               results.push({ name: name, status: "error", error: "No se extrajeron datos del PDF" });
               log("ERROR PDF sin datos: " + name);
               continue;
@@ -2645,7 +2762,7 @@
   }
 
   /** Intenta extraer un registro del formato de informe individual de laboratorio (PDF) */
-  function tryParseLabReport(text, origen, opts) {
+  async function tryParseLabReport(text, origen, opts) {
     opts = opts || {};
     const t = normalizePdfExtraction(text);
     // Detectar si parece un informe de laboratorio de aire
@@ -2747,7 +2864,7 @@
     // Remuestreo: vincular al muestreo programado con incidencia
     var linkRem = null;
     if (tipoMuestreo === "remuestreo") {
-      linkRem = askRemuestreoLink(punto, fechaRec);
+      linkRem = await askRemuestreoLink(punto, fechaRec);
       if (!linkRem) {
         log("Remuestreo cancelado por el usuario: " + (origen || ""));
         return 0;
@@ -2794,9 +2911,9 @@
     return 1;
   }
 
-  function importCSV(text, origen, tipoForzado) {
+  async function importCSV(text, origen, tipoForzado) {
     // Primero intentar formato de laboratorio (texto de PDF)
-    const nEuro = tryParseLabReport(text, origen, { tipoForzado: tipoForzado || "programado" });
+    const nEuro = await tryParseLabReport(text, origen, { tipoForzado: tipoForzado || "programado" });
     if (nEuro) {
       log("Laboratorio: 1 registro extraído desde " + (origen || "texto"));
       return;
@@ -3322,6 +3439,10 @@
     }
     html += "</tbody></table>";
 
+    // Mini-gráfico de aerobios (si Chart.js disponible) — se rellena tras insertar HTML
+    html += '<div class="no-print" style="margin:1rem 0;"><canvas id="reportChartAero" height="120"></canvas></div>';
+    html += '<p class="print-only" id="reportChartNote" style="display:none;font-size:0.8rem;color:#666;"></p>';
+
     if (remuestreos.length > 0) {
       html += "<h3 style='font-size:1rem;margin:1rem 0 0.4rem;'>Remuestreos (tras desinfección)</h3>";
       html += "<table><thead><tr>";
@@ -3451,6 +3572,34 @@
     document.getElementById("reportStatus").textContent = "Generado " + new Date().toLocaleTimeString("es-ES");
     document.getElementById("reportStatus").className = "badge badge-ok";
     log("Informe generado para " + periodKey() + " (" + reportRecs.length + " puntos del periodo)");
+    // Gráfico de aerobios en el informe
+    try {
+      if (typeof Chart !== "undefined") {
+        var canvas = document.getElementById("reportChartAero");
+        if (canvas && programados.length) {
+          var labels = sortRecordsByPointOrder(programados).map(function (r) { return r.punto; });
+          var data = sortRecordsByPointOrder(programados).map(function (r) {
+            return typeof r.aerobios === "number" ? r.aerobios : null;
+          });
+          if (window._reportChart) { try { window._reportChart.destroy(); } catch (e) {} }
+          window._reportChart = new Chart(canvas, {
+            type: "bar",
+            data: {
+              labels: labels,
+              datasets: [{ label: "Aerobios mesófilos (ufc/m³)", data: data, backgroundColor: "rgba(13,79,107,0.65)" }]
+            },
+            options: {
+              responsive: true,
+              plugins: {
+                legend: { display: true },
+                title: { display: true, text: "Aerobios mesófilos — " + periodoTxt }
+              },
+              scales: { y: { beginAtZero: true } }
+            }
+          });
+        }
+      }
+    } catch (eChart) { log("Gráfico informe: " + eChart.message); }
   }
 
   function formatDateES(iso) {
@@ -3697,38 +3846,39 @@
     var rows = [];
     periods.forEach(function (p) {
       sortRecordsByPointOrder(p.records || []).forEach(function (r) {
-        if ((r.tipoMuestreo || "programado") === "remuestreo") return; // tabla anual = programados; remuestreos en nota
         ensureRecordPeriodo(r);
         rows.push({
           periodo: r.periodo || p.id,
           mesLabel: monthLabelFromPeriod(r.periodo || p.id),
-          punto: r.punto,
+          punto: r.punto + ((r.tipoMuestreo === "remuestreo") ? " (Remuestreo)" : ""),
           aerobios: r.aerobios,
           hongosNP: r.hongosNP,
           hongosPat: r.hongosPat,
           estado: estadoConformeLabel(r),
-          tipo: r.tipoMuestreo || "programado"
+          tipo: r.tipoMuestreo || "programado",
+          puntoBase: r.punto
         });
       });
     });
     // Completar con memoria no archivada
     state.records.forEach(function (r) {
       ensureRecordPeriodo(r);
-      if ((r.tipoMuestreo || "programado") === "remuestreo") return;
       if (!r.periodo || r.periodo < from || r.periodo > to) return;
+      var label = r.punto + ((r.tipoMuestreo === "remuestreo") ? " (Remuestreo)" : "");
       var exists = rows.some(function (x) {
-        return x.periodo === r.periodo && x.punto === r.punto;
+        return x.periodo === r.periodo && x.punto === label && x.tipo === (r.tipoMuestreo || "programado");
       });
       if (!exists) {
         rows.push({
           periodo: r.periodo,
           mesLabel: monthLabelFromPeriod(r.periodo),
-          punto: r.punto,
+          punto: label,
           aerobios: r.aerobios,
           hongosNP: r.hongosNP,
           hongosPat: r.hongosPat,
           estado: estadoConformeLabel(r),
-          tipo: "programado"
+          tipo: r.tipoMuestreo || "programado",
+          puntoBase: r.punto
         });
       }
     });
@@ -3768,8 +3918,12 @@
         "<th style='border:1px solid #333;padding:0.35rem;'>Hongos Patógenos</th>" +
         "<th style='border:1px solid #333;padding:0.35rem;'>Estado</th></tr></thead><tbody>";
       rows.sort(function (a, b) {
-        var d = pointOrderIndex(a.punto) - pointOrderIndex(b.punto);
-        return d !== 0 ? d : String(a.periodo).localeCompare(String(b.periodo));
+        var d = pointOrderIndex(a.puntoBase || a.punto) - pointOrderIndex(b.puntoBase || b.punto);
+        if (d !== 0) return d;
+        var ta = a.tipo === "remuestreo" ? 1 : 0;
+        var tb = b.tipo === "remuestreo" ? 1 : 0;
+        if (ta !== tb) return ta - tb;
+        return String(a.periodo).localeCompare(String(b.periodo));
       });
       var lastP = null;
       rows.forEach(function (r) {
@@ -3794,7 +3948,10 @@
         "<th style='border:1px solid #333;padding:0.35rem;'>Estado</th></tr></thead><tbody>";
       rows.sort(function (a, b) {
         var d = String(a.periodo).localeCompare(String(b.periodo));
-        return d !== 0 ? d : pointOrderIndex(a.punto) - pointOrderIndex(b.punto);
+        if (d !== 0) return d;
+        var d2 = pointOrderIndex(a.puntoBase || a.punto) - pointOrderIndex(b.puntoBase || b.punto);
+        if (d2 !== 0) return d2;
+        return (a.tipo === "remuestreo" ? 1 : 0) - (b.tipo === "remuestreo" ? 1 : 0);
       });
       var lastM = null;
       rows.forEach(function (r) {
@@ -3895,7 +4052,130 @@
       log("No se pudo hidratar histórico: " + e.message);
     }
   }
+
   hydrateFromHistory();
+
+  // —— Primer arranque multi-centro ——
+  function applyJarrioTemplate() {
+    state.points = JSON.parse(JSON.stringify(DEFAULT_POINTS));
+    if (!state.config.hospital) state.config.hospital = "Hospital de Jarrio";
+    if (!state.config.areaSanitaria) state.config.areaSanitaria = "Área Sanitaria I";
+    state.config.plantillaCentro = "jarrio";
+    if (typeof renderPointsTable === "function") renderPointsTable();
+    if (typeof updateHeader === "function") updateHeader();
+    if (typeof fillManualPointSelect === "function") fillManualPointSelect();
+    log("Plantilla de puntos Hospital de Jarrio cargada");
+  }
+  function applyEmptyCenter() {
+    state.points = [];
+    state.config.hospital = state.config.hospital || "";
+    state.config.plantillaCentro = "vacio";
+    if (typeof renderPointsTable === "function") renderPointsTable();
+    log("Centro vacío: añada puntos en Configuración");
+  }
+  (function firstRunSetup() {
+    try {
+      if (localStorage.getItem("bsa_manager_project")) return;
+      if (localStorage.getItem("bsa_welcome_done")) {
+        if (!state.points.length) applyJarrioTemplate();
+        return;
+      }
+      openModalId("modalWelcome");
+    } catch (e) {
+      if (!state.points.length) applyJarrioTemplate();
+    }
+  })();
+  document.getElementById("btnWelcomeJarrio")?.addEventListener("click", function () {
+    applyJarrioTemplate();
+    try { localStorage.setItem("bsa_welcome_done", "1"); } catch (e) {}
+    closeModalId("modalWelcome");
+  });
+  document.getElementById("btnWelcomeEmpty")?.addEventListener("click", function () {
+    applyEmptyCenter();
+    try { localStorage.setItem("bsa_welcome_done", "1"); } catch (e) {}
+    closeModalId("modalWelcome");
+  });
+  document.getElementById("btnLoadJarrioTemplate")?.addEventListener("click", function () {
+    if (state.points.length && !confirm("¿Sustituir la lista actual de puntos por la plantilla de Jarrio?")) return;
+    applyJarrioTemplate();
+    alert("Plantilla Jarrio cargada (" + state.points.length + " puntos).");
+  });
+  document.getElementById("btnClearPoints")?.addEventListener("click", function () {
+    if (!confirm("¿Vaciar todos los puntos de muestreo?")) return;
+    applyEmptyCenter();
+  });
+
+  // —— Export CSV informe histórico (plantilla anual) ——
+  document.getElementById("btnExportHistCSV")?.addEventListener("click", async function () {
+    var from = document.getElementById("histRepFrom").value;
+    var to = document.getElementById("histRepTo").value;
+    var groupBy = (document.getElementById("histRepGroup") && document.getElementById("histRepGroup").value) || "mes";
+    var all = await idbGetAll();
+    var periods = all.filter(function (p) { return p.id >= from && p.id <= to; }).sort(function (a, b) { return a.id.localeCompare(b.id); });
+    var rows = [];
+    periods.forEach(function (p) {
+      sortRecordsByPointOrder(p.records || []).forEach(function (r) {
+        ensureRecordPeriodo(r);
+        rows.push({
+          periodo: r.periodo || p.id,
+          mesLabel: monthLabelFromPeriod(r.periodo || p.id),
+          punto: r.punto + (r.tipoMuestreo === "remuestreo" ? " (Remuestreo)" : ""),
+          aerobios: r.aerobios,
+          hongosNP: r.hongosNP,
+          hongosPat: r.hongosPat,
+          estado: estadoConformeLabel(r),
+          tipo: r.tipoMuestreo || "programado",
+          puntoBase: r.punto
+        });
+      });
+    });
+    state.records.forEach(function (r) {
+      ensureRecordPeriodo(r);
+      if (!r.periodo || r.periodo < from || r.periodo > to) return;
+      var label = r.punto + (r.tipoMuestreo === "remuestreo" ? " (Remuestreo)" : "");
+      if (!rows.some(function (x) { return x.periodo === r.periodo && x.punto === label && x.tipo === (r.tipoMuestreo || "programado"); })) {
+        rows.push({
+          periodo: r.periodo, mesLabel: monthLabelFromPeriod(r.periodo), punto: label,
+          aerobios: r.aerobios, hongosNP: r.hongosNP, hongosPat: r.hongosPat,
+          estado: estadoConformeLabel(r), tipo: r.tipoMuestreo || "programado", puntoBase: r.punto
+        });
+      }
+    });
+    if (groupBy === "punto") {
+      rows.sort(function (a, b) {
+        var d = pointOrderIndex(a.puntoBase || a.punto) - pointOrderIndex(b.puntoBase || b.punto);
+        if (d) return d;
+        return String(a.periodo).localeCompare(String(b.periodo));
+      });
+    } else {
+      rows.sort(function (a, b) {
+        var d = String(a.periodo).localeCompare(String(b.periodo));
+        if (d) return d;
+        return pointOrderIndex(a.puntoBase || a.punto) - pointOrderIndex(b.puntoBase || b.punto);
+      });
+    }
+    var sep = ";";
+    var lines = ["Fecha de Muestreo" + sep + "Punto de muestreo" + sep + "Aerobios mesófilos totales ufc/m3" + sep + "Hongos No Patógenos (N.P.)" + sep + "Hongos Patógenos" + sep + "Estado"];
+    rows.forEach(function (r) {
+      lines.push([r.mesLabel, r.punto, fmtVal(r.aerobios), fmtVal(r.hongosNP), fmtVal(r.hongosPat), r.estado].map(function (c) {
+        return '"' + String(c == null ? "" : c).replace(/"/g, '""') + '"';
+      }).join(sep));
+    });
+    var blob = new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "BSA_historico_" + from + "_" + to + ".csv";
+    a.click();
+    log("CSV histórico exportado: " + rows.length + " filas");
+  });
+
+  // PWA
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").then(function () {
+      log("Service Worker registrado (modo instalable)");
+    }).catch(function () { /* opcional */ });
+  }
+
   renderPointsTable();
   updatePeriodInfo();
   tryLoadLocal();
