@@ -1570,10 +1570,17 @@
 
   function ensureRecordPeriodo(rec) {
     rec.fechaRecogida = normalizeFechaISO(rec.fechaRecogida) || rec.fechaRecogida;
+    // Prioridad: remuestreo→periodo del incumplimiento; periodo forzado por nombre de archivo; fecha de recogida
     if (rec.tipoMuestreo === "remuestreo" && rec.periodoIncidencia) {
       rec.periodo = rec.periodoIncidencia;
-    } else {
+    } else if (rec._periodoArchivo) {
+      rec.periodo = rec._periodoArchivo;
+    } else if (!rec.periodo) {
       rec.periodo = periodoFromFecha(rec.fechaRecogida);
+    } else {
+      // Ya tiene periodo; alinear con fecha si no hay forzado
+      var fromFecha = periodoFromFecha(rec.fechaRecogida);
+      if (fromFecha && !rec._periodoArchivo) rec.periodo = fromFecha;
     }
     return rec;
   }
@@ -1601,13 +1608,55 @@
     return state.points.find(p => n.includes(p.nombre.toLowerCase().split(" ")[0]));
   }
 
+  /** Une letras separadas por espacios (artefacto habitual de PDF.js): "N o  d e t e c t a d o" → "nodetectado" */
+  function compactLetters(s) {
+    return String(s || "").toLowerCase().replace(/\s+/g, "").replace(/[·.\-_/]/g, "");
+  }
+
+  /** True si el valor significa ausencia / no detectado (tolerante a espacios raros del PDF) */
+  function isAusencia(val) {
+    if (val === null || val === undefined || val === "") return true;
+    if (typeof val === "number") return val === 0;
+    var c = compactLetters(val);
+    return c === "nodetectado" || c === "nd" || c === "n.d" || c === "n.d." || c === "ausencia" ||
+      c === "ausente" || c === "no" || c === "-" || c === "—" || c === "<ld" || c === "ld";
+  }
+
   function parseNumeric(val) {
     if (val === null || val === undefined || val === "") return null;
     if (typeof val === "number") return val;
+    if (isAusencia(val)) return "No detectado";
     const s = String(val).trim().toLowerCase();
-    if (s === "no detectado" || s === "nd" || s === "n.d." || s === "<ld" || s === "ausente") return "No detectado";
     const n = parseFloat(s.replace(",", "."));
     return isNaN(n) ? String(val).trim() : n;
+  }
+
+  /** Repara texto PDF.js con espacios entre letras en palabras clave */
+  function normalizePdfExtraction(text) {
+    var t = String(text || "").replace(/\r/g, "\n").replace(/\u00a0/g, " ");
+    // "N o   d e t e c t a d o" / "No d e tectado" → "No detectado"
+    t = t.replace(/N\s*o\s+d\s*e\s*t\s*e\s*c\s*t\s*a\s*d\s*o/gi, "No detectado");
+    t = t.replace(/n\s*o\s+d\s*e\s*t\s*e\s*c\s*t\s*a\s*d\s*o/gi, "No detectado");
+    // "A u s e n c i a"
+    t = t.replace(/A\s*u\s*s\s*e\s*n\s*c\s*i\s*a/gi, "Ausencia");
+    return t;
+  }
+
+  /** Mes (01-12) y año desde nombre de archivo tipo «… Enero 2026 …» */
+  function periodFromFilename(origen) {
+    if (!origen) return null;
+    var mesNombres = {
+      enero: "01", febrero: "02", marzo: "03", abril: "04", mayo: "05", junio: "06",
+      julio: "07", agosto: "08", septiembre: "09", setiembre: "09", octubre: "10",
+      noviembre: "11", diciembre: "12"
+    };
+    var fm = String(origen).match(
+      /(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septi[eé]mbre|setiembre|octubre|noviembre|diciembre)\s*(20\d{2})/i
+    );
+    if (!fm) return null;
+    var key = fm[1].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (key.indexOf("sept") === 0) key = "septiembre";
+    return fm[2] + "-" + (mesNombres[key] || mesNombres[fm[1].toLowerCase()] || "01");
   }
 
   function riskCode(riesgo) {
@@ -1643,14 +1692,12 @@
 
     // Hongos no patógenos (mohos y levaduras)
     let hnp = rec.hongosNP;
-    if (typeof hnp === "string") {
-      const low = hnp.toLowerCase();
-      if (low === "no detectado" || low === "nd" || low === "ausencia" || low === "") {
-        hnp = 0;
-      } else {
-        const m = hnp.match(/(\d+)/);
-        hnp = m ? parseInt(m[1], 10) : 1;
-      }
+    if (isAusencia(hnp)) {
+      hnp = 0;
+      rec.hongosNP = "No detectado";
+    } else if (typeof hnp === "string") {
+      const m = hnp.match(/(\d+)/);
+      hnp = m ? parseInt(m[1], 10) : 1;
     }
     if (typeof hnp === "number" && thrHongos !== null) {
       if (thrHongos === 0 && hnp > 0) {
@@ -1661,16 +1708,18 @@
     }
 
     // Hongos patógenos: siempre Ausencia
-    const hp = rec.hongosPat;
-    if (hp !== null && hp !== undefined) {
+    let hp = rec.hongosPat;
+    if (isAusencia(hp)) {
+      rec.hongosPat = "No detectado";
+      hp = "No detectado";
+    } else if (hp !== null && hp !== undefined) {
       const low = String(hp).toLowerCase().trim();
-      if (low !== "no detectado" && low !== "nd" && low !== "ausencia" && low !== "" && low !== "-") {
-        const num = parseFloat(low);
-        if (!isNaN(num) && num > 0) {
-          issues.push("Hongos patógenos detectados (" + hp + "). Se requiere Ausencia");
-        } else if (isNaN(num)) {
-          issues.push("Hongos patógenos: " + hp + " (revisar – se requiere Ausencia)");
-        }
+      const num = parseFloat(low.replace(",", "."));
+      if (!isNaN(num) && num > 0) {
+        issues.push("Hongos patógenos detectados (" + hp + "). Se requiere Ausencia");
+      } else if (isNaN(num) && low.length > 0) {
+        // Nombre de hongo u otro texto no vacío tras normalizar
+        issues.push("Hongos patógenos: " + hp + " (revisar – se requiere Ausencia)");
       }
     }
 
@@ -2413,7 +2462,7 @@
 
   /** Intenta extraer un registro del formato de informe individual de laboratorio (PDF) */
   function tryParseLabReport(text, origen) {
-    const t = String(text || "").replace(/\r/g, " ").replace(/\u00a0/g, " ");
+    const t = normalizePdfExtraction(text);
     // Detectar si parece un informe de laboratorio de aire
     if (!/INFORME/i.test(t) && !/Aerobios\s*mes/i.test(t) && !/Denominaci/i.test(t)) {
       return null;
@@ -2434,75 +2483,119 @@
     // 2) Aerobios – varios patrones (layout tabular PDF.js)
     let aerobios = null;
     var mA =
-      t.match(/Aerobios\s*mes[oó]filos\s*(?:totales)?\s*(?:UFC\/m3)?\s*[:\|\s]*(\d+(?:[.,]\d+)?)/i) ||
+      t.match(/Aerobios\s*mes[oó]filos\s*(?:totales)?\s*(?:UFC\/m[³3])?\s*[:\|\s]*(\d+(?:[.,]\d+)?)/i) ||
       t.match(/Aerobios\s*mes[oó]filos[^\d]{0,40}?(\d{1,4})(?:\s|-|PNT)/i) ||
       t.match(/mes[oó]filos\s*totales\s+(\d+)/i);
     if (mA) aerobios = parseNumeric(mA[1]);
 
-    // 3) Hongos N.P.
+    // 3) Hongos N.P. (tolerante a "No detectado" con espacios)
     let hongosNP = "No detectado", identNP = "";
-    var mNP = t.match(/Hongos\s*No\s*Pat[oó]genos\s*(?:\(N\.?P\.?\))?[^\dN]{0,30}(No\s*detectado|\d+)/i);
+    var mNP = t.match(/Hongos\s*No\s*Pat[oó]genos\s*(?:\(N\.?\s*P\.?\))?[^\d]{0,40}?(No\s*detectado|\d+)/i);
     if (mNP) hongosNP = parseNumeric(mNP[1]);
-    if (/Penicillium/i.test(t)) {
-      identNP = "Penicillium";
-      if (hongosNP === "No detectado" || hongosNP === 0 || hongosNP === null) {
-        var pm = t.match(/Hongos\s*No\s*Pat[oó]genos[^\d]{0,40}?(\d+)/i);
-        hongosNP = pm ? parseInt(pm[1], 10) : 1;
-      }
+    if (isAusencia(hongosNP)) hongosNP = "No detectado";
+    // Identificación de especie solo si hay colonias
+    var mIdent = t.match(/Hongos\s*No\s*Pat[oó]genos[\s\S]{0,80}?(Penicillium|Aspergillus|Cladosporium|Alternaria|Candida)/i);
+    if (mIdent && typeof hongosNP === "number" && hongosNP > 0) {
+      identNP = mIdent[1];
+    } else if (mIdent && hongosNP === "No detectado") {
+      // Especie citada pero resultado "No detectado" → no forzar colonia
+      identNP = "";
     }
-    // 4) Hongos patógenos
-    let hongosPat = "No detectado";
-    var mPat = t.match(/Hongos\s*Pat[oó]genos[^\dN]{0,30}(No\s*detectado|\d+|[A-Za-z][A-Za-z\s\.]+?)(?:\s{2}|PNT|-|$)/i);
-    if (mPat) {
-      var pv = mPat[1].trim();
-      if (/^no\s*detectado$/i.test(pv)) hongosPat = "No detectado";
-      else if (/^\d+$/.test(pv)) hongosPat = parseInt(pv, 10);
-      else if (pv.length > 1 && !/^pnt/i.test(pv)) hongosPat = pv;
+    if (/Penicillium/i.test(t) && typeof hongosNP === "number" && hongosNP > 0) {
+      identNP = identNP || "Penicillium";
     }
 
-    // 5) Fecha de recogida
+    // 4) Hongos patógenos — NUNCA tratar "No detectado" (aunque venga fragmentado) como positivo
+    let hongosPat = "No detectado";
+    var mPat = t.match(/Hongos\s*Pat[oó]genos[^\n\d]{0,50}?(No\s*detectado|\d+|Ausencia|[A-Za-záéíóúñ]+(?:\s+[A-Za-záéíóúñ]+)?)/i);
+    if (mPat) {
+      var pv = mPat[1].trim();
+      if (isAusencia(pv)) hongosPat = "No detectado";
+      else if (/^\d+$/.test(pv)) hongosPat = parseInt(pv, 10);
+      else if (/^pnt/i.test(pv) || /^m[eé]todo/i.test(pv)) hongosPat = "No detectado";
+      else hongosPat = pv; // posible nombre de hongo
+    }
+    // Si tras compactar el entorno del parámetro sigue siendo ausencia
+    var nearPat = t.match(/Hongos\s*Pat[oó]genos[\s\S]{0,60}/i);
+    if (nearPat && /no\s*detectado|ausencia/i.test(nearPat[0])) {
+      hongosPat = "No detectado";
+    }
+
+    // 5) Fecha de recogida — NO usar Fecha final ni Fecha inicio del ensayo
     let fecha = "";
     var mF = t.match(/Fecha\s*de\s*recogida\s*[:\s]*(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{2,4})/i);
     if (mF) {
       var yy = mF[3].length === 2 ? "20" + mF[3] : mF[3];
       fecha = yy + "-" + String(mF[2]).padStart(2, "0") + "-" + String(mF[1]).padStart(2, "0");
     }
-    if (!fecha) {
-      mF = t.match(/(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(20\d{2})/);
-      // Preferir fecha cercana a "recogida" si hay varias
-      if (mF && /recogida/i.test(t)) {
-        fecha = mF[3] + "-" + String(mF[2]).padStart(2, "0") + "-" + String(mF[1]).padStart(2, "0");
-      }
+    // Periodo prioritario: nombre de archivo (Enero 2026) > fecha de recogida
+    var periodoFile = periodFromFilename(origen);
+    if (!fecha && periodoFile) {
+      fecha = periodoFile + "-15";
     }
-    // Fallback: mes en nombre de archivo
-    if (!fecha && origen) {
-      var mesNombres = { enero: "01", febrero: "02", marzo: "03", abril: "04", mayo: "05", junio: "06",
-        julio: "07", agosto: "08", septiembre: "09", octubre: "10", noviembre: "11", diciembre: "12" };
-      var fm = String(origen).match(/(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\s*(20\d{2})/i);
-      if (fm) fecha = fm[2] + "-" + (mesNombres[fm[1].toLowerCase()] || "01") + "-15";
-    }
+    // Nunca tomar la primera fecha suelta del documento (suele ser Fecha final / inicio)
 
     let informeNro = "";
     var mInf = t.match(/INFORME\s*(?:N[º°o]|No|#)?\s*:?\s*(\d+\w*)/i);
     if (mInf) informeNro = mInf[1];
 
+    // Tipo: remuestreo solo si el archivo o texto lo indican explícitamente
+    var tipoMuestreo = "programado";
+    if (/remuestreo/i.test(String(origen || "")) || /\bremuestreo\b/i.test(t)) {
+      tipoMuestreo = "remuestreo";
+    }
+
     if (!punto && aerobios === null) return null;
     if (!punto) punto = "Desconocido";
+
+    // Validación de fechas / periodo antes de aceptar
+    var fechaFinal = "";
+    var mFin = t.match(/Fecha\s*final\s*[:\s]*(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{2,4})/i);
+    if (mFin) {
+      var yf = mFin[3].length === 2 ? "20" + mFin[3] : mFin[3];
+      fechaFinal = yf + "-" + String(mFin[2]).padStart(2, "0") + "-" + String(mFin[1]).padStart(2, "0");
+    }
 
     const def = findPointDef(punto);
     const rec = {
       punto: punto,
       nivelRiesgo: def ? def.riesgo : "",
       aerobios: aerobios,
-      hongosNP: hongosNP,
-      hongosPat: hongosPat,
-      fechaRecogida: fecha || (state.year + "-" + String(state.month).padStart(2, "0") + "-15"),
+      hongosNP: isAusencia(hongosNP) ? "No detectado" : hongosNP,
+      hongosPat: isAusencia(hongosPat) ? "No detectado" : hongosPat,
+      fechaRecogida: fecha || (periodoFile ? periodoFile + "-15" : (state.year + "-" + String(state.month).padStart(2, "0") + "-15")),
       documentoOrigen: origen || (informeNro ? "Lab " + informeNro : "Texto laboratorio"),
       informeNro: informeNro,
       observaciones: identNP ? "Identificación: " + identNP : "",
       estado: "pendiente",
-      tipoMuestreo: "programado"
+      tipoMuestreo: tipoMuestreo,
+      _fechaFinalInforme: fechaFinal || ""
     };
+    // Forzar periodo del archivo si existe (el informe se etiqueta por mes de muestreo)
+    if (periodoFile) {
+      rec._periodoArchivo = periodoFile;
+      rec.periodo = periodoFile;
+      if (fecha) {
+        var pf = periodoFromFecha(fecha);
+        if (pf && pf !== periodoFile) {
+          rec.observaciones = (rec.observaciones ? rec.observaciones + " · " : "") +
+            "Periodo según archivo (" + periodoFile + "); fecha recogida leída: " + fecha;
+        }
+      }
+    }
+    // Si es remuestreo y hay incidencia previa del mismo punto, enlazar periodo
+    if (tipoMuestreo === "remuestreo") {
+      var prevInc = state.records.find(function (r) {
+        return r.punto === punto && r.requiereRemuestreo && (r.tipoMuestreo || "programado") === "programado";
+      });
+      if (prevInc) {
+        ensureRecordPeriodo(prevInc);
+        rec.periodoIncidencia = prevInc.periodo;
+        rec.periodo = prevInc.periodo;
+        rec.motivoRemuestreo = rec.motivoRemuestreo || prevInc.motivoRemuestreoSugerido || "Tras incumplimiento";
+      }
+    }
+
     upsertRecord(rec);
     return 1;
   }
