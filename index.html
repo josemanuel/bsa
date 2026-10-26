@@ -6,6 +6,11 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#0d4f6b">
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="BSA Manager">
+  <link rel="apple-touch-icon" href="docs/icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="docs/icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="docs/icons/icon-512.png">
   <title>BSA Manager – Gestión de Informes de Bioseguridad Ambiental</title>
   <script src="lib/pdf.min.js"></script>
   <script src="lib/chart.umd.min.js"></script>
@@ -564,6 +569,7 @@
       <div class="dropdown">
         <button type="button" data-panel="report">Informe mensual</button>
         <button type="button" data-panel="informe-historico">Informe histórico evolutivo</button>
+        <button type="button" data-panel="informe-ia">Generador de informe IA</button>
       </div>
     </div>
 
@@ -1022,6 +1028,51 @@
       </div>
       <div id="histReportPreview" style="background:#fff;border:1px solid var(--border);padding:1.5rem;max-width:900px;margin:0 auto;box-shadow:var(--shadow);">
         <p style="text-align:center;color:var(--muted);">Seleccione el rango y pulse «Generar informe histórico».</p>
+      </div>
+    </section>
+
+
+    <!-- ========== GENERADOR INFORME IA ========== -->
+    <section class="panel" id="panel-informe-ia">
+      <div class="card">
+        <h2>Generador de informe ejecutivo (IA)</h2>
+        <p style="font-size:0.9rem;color:var(--muted);margin-bottom:0.8rem;">
+          Prepara los datos del histórico para analizarlos con el <strong>GEM de Bioseguridad</strong> en Gemini.
+          Se descargarán un <strong>CSV</strong> (tabla resumen) y un <strong>JSON</strong> (datos completos con niveles de riesgo)
+          y se abrirá el GEM para que adjunte ambos archivos.
+        </p>
+        <div class="row" style="align-items:flex-end;">
+          <div>
+            <label for="iaFrom">Desde</label>
+            <input type="month" id="iaFrom" value="2026-01">
+          </div>
+          <div>
+            <label for="iaTo">Hasta</label>
+            <input type="month" id="iaTo" value="2026-12">
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:0.5rem;flex-wrap:wrap;">
+            <button type="button" class="btn btn-primary" id="btnIaPrepare">Preparar datos y abrir GEM</button>
+            <button type="button" class="btn btn-secondary" id="btnIaCopyPrompt">Copiar prompt al portapapeles</button>
+          </div>
+        </div>
+        <div style="margin-top:1rem;background:#eaf4f9;border-left:4px solid var(--accent);padding:0.75rem 1rem;font-size:0.88rem;border-radius:6px;">
+          <strong>Pasos en Gemini:</strong>
+          <ol style="margin:0.4rem 0 0;padding-left:1.2rem;">
+            <li>Pulse «Preparar datos y abrir GEM» (descarga CSV + JSON y abre el GEM).</li>
+            <li>En Gemini, adjunte los dos archivos descargados.</li>
+            <li>Si hace falta, pegue el prompt (botón «Copiar prompt» o se intenta copiar al preparar).</li>
+            <li>Revise el informe ejecutivo antes de usarlo en gestión clínica.</li>
+          </ol>
+        </div>
+        <p style="font-size:0.82rem;color:var(--muted);margin-top:0.6rem;">
+          GEM: <a href="https://gemini.google.com/gem/1VFLDzs2MAjLsQRkFGCqoARddGaEJ5Iko?usp=sharing" target="_blank" rel="noopener">Bioseguridad — informe ejecutivo</a>
+          · App: <a href="https://josemanuel.github.io/bsa/" target="_blank" rel="noopener">josemanuel.github.io/bsa</a>
+        </p>
+        <p id="iaStatus" style="font-size:0.85rem;margin-top:0.5rem;"></p>
+      </div>
+      <div class="card">
+        <h2>Prompt recomendado (para el GEM)</h2>
+        <pre id="iaPromptPreview" style="white-space:pre-wrap;font-size:0.8rem;background:#f4f7f9;border:1px solid var(--border);padding:0.9rem;border-radius:8px;max-height:320px;overflow:auto;"></pre>
       </div>
     </section>
 
@@ -1854,6 +1905,7 @@
     document.querySelectorAll("nav.tabs .nav-item").forEach(n => n.classList.remove("open"));
     document.getElementById("mainTabs").classList.remove("mobile-open");
     if (panelId === "vista-anual") renderVistaAnual();
+    if (panelId === "informe-ia") initIaPanel();
     if (panelId === "historico" && typeof refreshHistoryTable === "function") refreshHistoryTable();
   }
 
@@ -4170,6 +4222,178 @@
   });
 
   // PWA
+
+  // ========== INFORME IA (GEM) ==========
+  var GEM_BSA_URL = "https://gemini.google.com/gem/1VFLDzs2MAjLsQRkFGCqoARddGaEJ5Iko?usp=sharing";
+
+  function buildIaPromptText() {
+    var lines = [];
+    lines.push("ROL");
+    lines.push("Eres un experto senior en bioseguridad ambiental hospitalaria (salas de ambiente controlado), con dominio de la norma UNE 171340:2020 (versión corregida 2021) y de los protocolos de monitorización microbiológica del aire en centros sanitarios.");
+    lines.push("Tu tarea es elaborar un INFORME EJECUTIVO, claro y accionable, a partir de los datos que el usuario adjunta (CSV + JSON) generados por BSA Manager (https://josemanuel.github.io/bsa/).");
+    lines.push("");
+    lines.push("ENTRADAS OBLIGATORIAS (adjuntas por el usuario)");
+    lines.push("1) CSV: tabla resumen de muestreos (Fecha de muestreo; Punto; Nivel de riesgo; Aerobios mesófilos ufc/m³; Hongos no patógenos; Hongos patógenos; Estado Conforme/No conforme; Tipo). Puede incluir filas de remuestreo marcadas como «(Remuestreo)».");
+    lines.push("2) JSON: datos originales del sistema (registros con punto, nivel de riesgo R1–R5 según UNE 171340, aerobios, hongos NP, hongos patógenos, fecha de recogida, periodo YYYY-MM, tipo programado/remuestreo, estado, incidencias, umbrales y catálogo de puntos).");
+    lines.push("");
+    lines.push("FUENTES DE CONOCIMIENTO (usar cuando aporten criterio; no inventar umbrales ajenos a estas fuentes o a los datos)");
+    lines.push("• Protocolo para la monitorización de la bioseguridad ambiental en salas de ambiente controlado en centros sanitarios (Sociedad Andaluza de Medicina Preventiva), en la base de conocimientos del GEM.");
+    lines.push("• UNE 171340:2020 (corregida junio 2021) Validación y cualificación de salas de ambiente controlado en hospitales, en la base de conocimientos.");
+    lines.push("• Manual de BSA Manager: https://josemanuel.github.io/bsa/ayuda.html");
+    lines.push("");
+    lines.push("REGLAS DE ANÁLISIS");
+    lines.push("• No inventes resultados analíticos ni puntos de muestreo que no figuren en CSV/JSON.");
+    lines.push("• Distingue muestreos programados de remuestreos; un remuestreo conforme indica cierre de ciclo tras desinfección, no ausencia de incidencia previa.");
+    lines.push("• Interpreta el cumplimiento según el nivel de riesgo del punto (R5…R1) y los umbrales del JSON; hongos patógenos → ausencia esperada.");
+    lines.push("• Si faltan meses o puntos, dilo explícitamente (datos incompletos).");
+    lines.push("• Lenguaje profesional, en español, orientado a dirección, calidad y medicina preventiva.");
+    lines.push("• Toda recomendación debe ser proporcional a la evidencia de los datos y alineada con protocolo/UNE.");
+    lines.push("");
+    lines.push("ESTRUCTURA OBLIGATORIA DEL INFORME");
+    lines.push("1. Portada breve: centro (si consta), periodo analizado, fecha del informe, origen de los datos (BSA Manager).");
+    lines.push("2. Resumen ejecutivo (máx. 10–12 líneas): cumplimiento global, nº incidencias, remuestreos, mensaje clave para la dirección.");
+    lines.push("3. Metodología y alcance: periodos, puntos, tipos de muestra, limitación (datos locales exportados).");
+    lines.push("4. Análisis por áreas / puntos de muestreo (quirófanos, REA, esterilización Área Estéril vs Sala Limpio, endoscopias, etc.).");
+    lines.push("5. Análisis por nivel de riesgo (R4/R3/R2/R1…): desempeño y desviaciones.");
+    lines.push("6. Matriz resumen del desempeño microbiológico (tabla: punto o área × % conformidad, máximos de mesófilos, hongos/patógenos, remuestreos).");
+    lines.push("7. Evolución temporal: tendencias, meses críticos.");
+    lines.push("8. Incidencias y gestión: remuestreos y cierre de ciclos; no especular más allá de los datos.");
+    lines.push("9. Conclusiones.");
+    lines.push("10. Recomendaciones ejecutivas priorizadas (corto/medio plazo), realistas para un hospital de área sanitaria.");
+    lines.push("11. Anexos opcionales: listado de no conformidades; lagunas de información.");
+    lines.push("");
+    lines.push("FORMATO");
+    lines.push("Markdown bien estructurado, con tablas cuando aporten claridad. Indica que el informe no sustituye la certificación normativa ni el juicio del responsable de bioseguridad.");
+    return lines.join("\n");
+  }
+
+  function downloadBlob(filename, blob) {
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    setTimeout(function () { try { URL.revokeObjectURL(a.href); } catch (e) {} }, 2000);
+  }
+
+  async function buildIaExportRows(from, to) {
+    var all = await idbGetAll();
+    var periods = all.filter(function (p) { return p.id >= from && p.id <= to; }).sort(function (a, b) { return a.id.localeCompare(b.id); });
+    var rows = [];
+    var fullRecords = [];
+    function pushRec(r, periodFallback) {
+      ensureRecordPeriodo(r);
+      var per = r.periodo || periodFallback || "";
+      if (!per || per < from || per > to) return;
+      fullRecords.push(Object.assign({}, r, { periodo: per }));
+      rows.push({
+        periodo: per,
+        mesLabel: (typeof monthLabelFromPeriod === "function") ? monthLabelFromPeriod(per) : per,
+        punto: r.punto + (r.tipoMuestreo === "remuestreo" ? " (Remuestreo)" : ""),
+        puntoBase: r.punto,
+        aerobios: r.aerobios,
+        hongosNP: r.hongosNP,
+        hongosPat: r.hongosPat,
+        estado: (typeof estadoConformeLabel === "function") ? estadoConformeLabel(r) : (r.estado || ""),
+        tipo: r.tipoMuestreo || "programado",
+        nivelRiesgo: r.nivelRiesgo || ""
+      });
+    }
+    periods.forEach(function (p) {
+      (p.records || []).forEach(function (r) { pushRec(r, p.id); });
+    });
+    state.records.forEach(function (r) {
+      ensureRecordPeriodo(r);
+      var exists = fullRecords.some(function (x) {
+        return x.periodo === r.periodo && x.punto === r.punto &&
+          (x.tipoMuestreo || "programado") === (r.tipoMuestreo || "programado") &&
+          String(x.fechaRecogida || "") === String(r.fechaRecogida || "");
+      });
+      if (!exists) pushRec(r, r.periodo);
+    });
+    rows.sort(function (a, b) {
+      var d = String(a.periodo).localeCompare(String(b.periodo));
+      if (d) return d;
+      return (typeof pointOrderIndex === "function") ? (pointOrderIndex(a.puntoBase) - pointOrderIndex(b.puntoBase)) : 0;
+    });
+    return { rows: rows, fullRecords: fullRecords, periods: periods };
+  }
+
+  async function exportIaCsvAndJson(from, to) {
+    var data = await buildIaExportRows(from, to);
+    var sep = ";";
+    var lines = ["Fecha de Muestreo" + sep + "Punto de muestreo" + sep + "Nivel de riesgo" + sep + "Aerobios mesófilos totales ufc/m3" + sep + "Hongos No Patógenos (N.P.)" + sep + "Hongos Patógenos" + sep + "Estado" + sep + "Tipo"];
+    data.rows.forEach(function (r) {
+      lines.push([r.mesLabel, r.punto, r.nivelRiesgo, fmtVal(r.aerobios), fmtVal(r.hongosNP), fmtVal(r.hongosPat), r.estado, r.tipo].map(function (c) {
+        return '"' + String(c == null ? "" : c).replace(/"/g, '""') + '"';
+      }).join(sep));
+    });
+    var csvBlob = new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    downloadBlob("BSA_historico_" + from + "_" + to + ".csv", csvBlob);
+
+    var payload = {
+      exportado: new Date().toISOString(),
+      aplicacion: "BSA Manager",
+      url: "https://josemanuel.github.io/bsa/",
+      centro: state.config.hospital || "",
+      areaSanitaria: state.config.areaSanitaria || "",
+      responsable: state.config.responsable || "",
+      periodoDesde: from,
+      periodoHasta: to,
+      umbrales: {
+        thrR4: state.config.thrR4, thrR3: state.config.thrR3, thrR2: state.config.thrR2, thrR1: state.config.thrR1,
+        thrHongosR4: state.config.thrHongosR4, thrHongosR3: state.config.thrHongosR3,
+        thrHongosR2: state.config.thrHongosR2, thrHongosR1: state.config.thrHongosR1,
+        thrHongosPat: state.config.thrHongosPat
+      },
+      puntosCatalogo: state.points,
+      registros: data.fullRecords,
+      periodosHistorico: data.periods.map(function (p) {
+        return { id: p.id, records: p.records || [], savedAt: p.savedAt || null };
+      })
+    };
+    var jsonBlob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+    downloadBlob("BSA_historico_" + from + "_" + to + ".json", jsonBlob);
+    return data.rows.length;
+  }
+
+  function initIaPanel() {
+    var pre = document.getElementById("iaPromptPreview");
+    if (pre) pre.textContent = buildIaPromptText();
+  }
+
+  document.getElementById("btnIaCopyPrompt")?.addEventListener("click", function () {
+    var text = buildIaPromptText();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        var st = document.getElementById("iaStatus");
+        if (st) st.textContent = "Prompt copiado al portapapeles.";
+        log("Prompt IA copiado");
+      }).catch(function () {
+        alert("No se pudo copiar automáticamente. Seleccione el texto del cuadro de prompt.");
+      });
+    } else {
+      alert("Copie el texto del cuadro «Prompt recomendado».");
+    }
+  });
+
+  document.getElementById("btnIaPrepare")?.addEventListener("click", async function () {
+    var from = document.getElementById("iaFrom").value || "2020-01";
+    var to = document.getElementById("iaTo").value || "2099-12";
+    var st = document.getElementById("iaStatus");
+    try {
+      if (st) st.textContent = "Generando CSV y JSON…";
+      var n = await exportIaCsvAndJson(from, to);
+      if (st) st.textContent = "Descargados CSV y JSON (" + n + " filas). Abriendo GEM… Adjunte ambos archivos en Gemini.";
+      log("Export IA: " + n + " filas " + from + "–" + to);
+      try { await navigator.clipboard.writeText(buildIaPromptText()); } catch (eClip) {}
+      window.open(GEM_BSA_URL, "_blank", "noopener");
+    } catch (e) {
+      if (st) st.textContent = "Error: " + (e.message || e);
+      alert("No se pudo preparar la exportación: " + (e.message || e));
+    }
+  });
+
+
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").then(function () {
       log("Service Worker registrado (modo instalable)");
