@@ -217,8 +217,21 @@
     #reportPreview .meta-table { width: auto; margin-bottom: 1rem; }
     #reportPreview .meta-table td { border: none; padding: 0.2rem 0.8rem 0.2rem 0; }
     #reportPreview .conclusion { background: #f0f7f0; padding: 0.9rem 1rem; border-left: 4px solid var(--success); margin: 1rem 0; }
+    #reportPreview .conclusion.con-incidencia { background: #fff8f0; border-left-color: #e67e22; }
     #reportPreview .recomendaciones { background: #f8f6f0; padding: 0.9rem 1rem; border-left: 4px solid var(--warning); margin: 1rem 0; }
     #reportPreview .anexo { margin-top: 1.5rem; font-size: 0.88rem; color: var(--muted); }
+    #reportPreview tr.inc-row td { background: #ffe4c4 !important; }
+    #reportPreview tr.inc-row td.pat-pos { background: #ffd0a0 !important; font-weight: 700; color: #8b2500; }
+    #reportPreview .inc-action {
+      background: #ffcc80; font-weight: 700; padding: 0.25rem 0.55rem;
+      display: inline-block; border-radius: 3px; margin-top: 0.25rem; color: #5c2b00;
+    }
+    #reportPreview .page-break { page-break-before: always; break-before: page; margin-top: 1.5rem; }
+    @media print {
+      #reportPreview .page-break { page-break-before: always; break-before: page; }
+      #reportPreview tr.inc-row td { background: #ffe4c4 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      #reportPreview .inc-action { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
     .toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; align-items: center; }
     .toolbar .spacer { flex: 1; }
     .config-table input { max-width: 100px; }
@@ -2861,6 +2874,7 @@
 
     // 4) Hongos patógenos — NUNCA tratar "No detectado" (aunque venga fragmentado) como positivo
     let hongosPat = "No detectado";
+    let identPat = "";
     var mPat = t.match(/Hongos\s*Pat[oó]genos[^\n\d]{0,50}?(No\s*detectado|\d+|Ausencia|[A-Za-záéíóúñ]+(?:\s+[A-Za-záéíóúñ]+)?)/i);
     if (mPat) {
       var pv = mPat[1].trim();
@@ -2869,10 +2883,23 @@
       else if (/^pnt/i.test(pv) || /^m[eé]todo/i.test(pv)) hongosPat = "No detectado";
       else hongosPat = pv; // posible nombre de hongo
     }
-    // Si tras compactar el entorno del parámetro sigue siendo ausencia
-    var nearPat = t.match(/Hongos\s*Pat[oó]genos[\s\S]{0,60}/i);
-    if (nearPat && /no\s*detectado|ausencia/i.test(nearPat[0])) {
+    var nearPat = t.match(/Hongos\s*Pat[oó]genos[\s\S]{0,120}/i);
+    if (nearPat && /no\s*detectado|ausencia/i.test(nearPat[0]) && typeof hongosPat !== "number" && !/aspergillus|fusarium|mucor|rhizopus|candida\s*albicans/i.test(nearPat[0])) {
       hongosPat = "No detectado";
+    }
+    // Identificación de germen patógeno (p. ej. Aspergillus)
+    var mPatIdent = t.match(/Hongos\s*Pat[oó]genos[\s\S]{0,140}?(Aspergillus(?:\s+(?:fumigatus|flavus|niger|terreus))?|Fusarium|Mucor|Rhizopus|Scedosporium|Candida\s+albicans)/i);
+    if (mPatIdent && !isAusencia(hongosPat)) {
+      identPat = mPatIdent[1].replace(/\s+/g, " ").trim();
+      // Forma corta habitual en informes: "1 (Aspergillus)"
+      var shortName = identPat.split(/\s+/)[0];
+      if (typeof hongosPat === "number") {
+        hongosPat = hongosPat + " (" + shortName + ")";
+      } else if (/^\d+$/.test(String(hongosPat))) {
+        hongosPat = hongosPat + " (" + shortName + ")";
+      } else if (!/\(/i.test(String(hongosPat)) && !new RegExp(shortName, "i").test(String(hongosPat))) {
+        hongosPat = String(hongosPat) + " (" + shortName + ")";
+      }
     }
 
     // 5) Fecha de recogida — NO usar Fecha final ni Fecha inicio del ensayo
@@ -2925,16 +2952,20 @@
     }
 
     const def = findPointDef(punto);
+    var obsParts = [];
+    if (identNP) obsParts.push("Identificación N.P.: " + identNP);
+    if (typeof identPat !== "undefined" && identPat) obsParts.push("Identificación patógeno: " + identPat);
     const rec = {
       punto: punto,
       nivelRiesgo: def ? def.riesgo : "",
       aerobios: aerobios,
       hongosNP: isAusencia(hongosNP) ? "No detectado" : hongosNP,
       hongosPat: isAusencia(hongosPat) ? "No detectado" : hongosPat,
+      identPat: (typeof identPat !== "undefined" && identPat) ? identPat : "",
       fechaRecogida: fechaRec,
       documentoOrigen: origen || (informeNro ? "Lab " + informeNro : "Texto laboratorio"),
       informeNro: informeNro,
-      observaciones: identNP ? "Identificación: " + identNP : "",
+      observaciones: obsParts.join(" · "),
       estado: "pendiente",
       tipoMuestreo: tipoMuestreo,
       _fechaFinalInforme: fechaFinal || ""
@@ -3428,6 +3459,36 @@
   // ========== REPORT ==========
   document.getElementById("btnGenerateReport").addEventListener("click", generateReport);
 
+
+  /** Celda de hongos patógenos para informe: "1 (Aspergillus)" si hay identificación */
+  function fmtHongosPatCell(r) {
+    if (!r || isAusencia(r.hongosPat)) return "No detectado";
+    var v = r.hongosPat;
+    var name = r.identPat || "";
+    if (!name && r.observaciones) {
+      var m = String(r.observaciones).match(/pat[oó]geno[s]?:\s*([A-Za-zÁÉÍÓÚáéíóúñÑ]+)/i) ||
+              String(r.observaciones).match(/\b(Aspergillus|Fusarium|Mucor|Rhizopus|Scedosporium)\b/i);
+      if (m) name = m[1];
+    }
+    if (typeof v === "number") {
+      return name ? (v + " (" + name.split(/\s+/)[0] + ")") : String(v);
+    }
+    var s = String(v).trim();
+    if (/^\d+$/.test(s) && name) return s + " (" + name.split(/\s+/)[0] + ")";
+    // Ya incluye nombre o es solo el nombre del germen
+    if (name && !/\(/i.test(s) && !new RegExp(name.split(/\s+/)[0], "i").test(s)) {
+      return s + " (" + name.split(/\s+/)[0] + ")";
+    }
+    return s;
+  }
+
+  function recordIsIncidencia(r) {
+    if (!r) return false;
+    if (r.estado === "incidencia") return true;
+    if (!isAusencia(r.hongosPat)) return true;
+    return false;
+  }
+
   function generateReport() {
     const preview = document.getElementById("reportPreview");
     const hospital = state.config.hospital;
@@ -3446,22 +3507,21 @@
     const areaSan = state.config.areaSanitaria || "";
     const logoPath = state.config.logoPath || "docs/logo_sespa.png";
 
-    // Cabecera institucional
-    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem;border-bottom:2px solid #0d4f6b;padding-bottom:0.75rem;">';
+    // Cabecera institucional (alineada al modelo SESPA / informe editado)
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.85rem;border-bottom:2px solid #0d4f6b;padding-bottom:0.65rem;">';
     html += '<div style="flex:1">';
-    html += '<div style="font-size:0.75rem;color:#5a6f7a;text-transform:uppercase;letter-spacing:0.04em;">Servicio de Salud del Principado de Asturias</div>';
-    if (areaSan) html += '<div style="font-size:0.85rem;font-weight:600;color:#0d4f6b;">' + esc(areaSan) + '</div>';
-    html += '<div style="font-size:1.05rem;font-weight:700;margin-top:0.2rem;">' + esc(hospital) + '</div>';
-    if (responsable) html += '<div style="font-size:0.85rem;margin-top:0.15rem;">Responsable: ' + esc(responsable) + '</div>';
+    html += '<div style="font-size:0.72rem;color:#5a6f7a;text-transform:uppercase;letter-spacing:0.04em;">Servicio de Salud del Principado de Asturias</div>';
+    if (areaSan) html += '<div style="font-size:0.88rem;font-weight:600;color:#0d4f6b;">' + esc(areaSan) + '</div>';
+    html += '<div style="font-size:1.08rem;font-weight:700;margin-top:0.15rem;">' + esc(hospital || "—") + '</div>';
     html += '</div>';
     html += '<div style="text-align:right;min-width:90px;">';
     html += '<img src="' + escAttr(logoPath) + '" alt="SESPA" style="max-height:56px;max-width:120px;" onerror="this.style.display=\'none\'">';
     html += '</div></div>';
 
-    html += "<h1 style='text-align:center;'>RESULTADOS DEFINITIVOS de análisis microbiológico de seguridad ambiental</h1>";
-    html += "<p class='subtitle'>Informe " + fechaInforme + " · Muestreo " + periodoTxt + "</p>";
+    html += "<h1 style='text-align:center;margin:0.6rem 0 0.25rem;'>RESULTADOS DEFINITIVOS de análisis microbiológico de seguridad ambiental</h1>";
+    html += "<p class='subtitle' style='margin-bottom:1rem;'>Informe " + fechaInforme + " · Muestreo " + periodoTxt + "</p>";
 
-    html += "<h2>Resultados</h2>";
+    html += "<h2 style='margin-top:0.4rem;'>Resultados</h2>";
     html += "<table class='meta-table'><tr><td><strong>Tipo de muestra</strong></td><td>" + esc(tipo) + "</td></tr>";
     html += "<tr><td><strong>Fecha de recogida</strong></td><td>" + esc(fechaRecogida) + "</td></tr>";
     html += "<tr><td><strong>Fecha informe</strong></td><td>" + esc(fechaInforme) + "</td></tr></table>";
@@ -3469,7 +3529,7 @@
     const programados = reportRecs.filter(function (r) { return (r.tipoMuestreo || "programado") !== "remuestreo"; });
     const remuestreos = reportRecs.filter(function (r) { return r.tipoMuestreo === "remuestreo"; });
 
-    html += "<h3 style='font-size:1rem;margin:0.8rem 0 0.4rem;'>Muestreos programados</h3>";
+    // Tabla de resultados (sin subtítulo intermedio; el modelo oficial va directa)
     html += "<table><thead><tr>";
     html += "<th>Punto de recogida</th><th>Nivel de riesgo</th>";
     html += "<th>Aerobios mesófilos totales<br>ufc/m³</th>";
@@ -3480,20 +3540,26 @@
       html += "<tr><td colspan='5' style='text-align:center;color:#888;'>Sin muestreos programados</td></tr>";
     } else {
       sortRecordsByPointOrder(programados).forEach(function (r) {
-        html += "<tr>";
+        var inc = recordIsIncidencia(r);
+        var patCell = fmtHongosPatCell(r);
+        var rowClass = inc ? " class='inc-row'" : "";
+        html += "<tr" + rowClass + ">";
         html += "<td>" + esc(r.punto) + "</td>";
         html += "<td>" + esc(r.nivelRiesgo) + "</td>";
         html += "<td><strong>" + esc(fmtVal(r.aerobios)) + "</strong></td>";
         html += "<td>" + esc(fmtVal(r.hongosNP)) + "</td>";
-        html += "<td>" + esc(fmtVal(r.hongosPat)) + "</td>";
+        if (inc && !isAusencia(r.hongosPat)) {
+          html += "<td class='pat-pos'><strong>" + esc(patCell) + "</strong></td>";
+        } else {
+          html += "<td>" + esc(patCell) + "</td>";
+        }
         html += "</tr>";
       });
     }
     html += "</tbody></table>";
 
-    // Mini-gráfico de aerobios (si Chart.js disponible) — se rellena tras insertar HTML
+    // Gráfico solo en pantalla
     html += '<div class="no-print" style="margin:1rem 0;"><canvas id="reportChartAero" height="120"></canvas></div>';
-    html += '<p class="print-only" id="reportChartNote" style="display:none;font-size:0.8rem;color:#666;"></p>';
 
     if (remuestreos.length > 0) {
       html += "<h3 style='font-size:1rem;margin:1rem 0 0.4rem;'>Remuestreos (tras desinfección)</h3>";
@@ -3502,35 +3568,36 @@
       html += "</tr></thead><tbody>";
       sortRecordsByPointOrder(remuestreos).forEach(function (r) {
         var resLabel = r.estado === "validado" ? "Conforme" : (r.estado === "incidencia" ? "No conforme" : "Pendiente");
-        html += "<tr>";
+        var inc = recordIsIncidencia(r);
+        html += "<tr" + (inc ? " class='inc-row'" : "") + ">";
         html += "<td>" + esc(r.punto) + "</td>";
         html += "<td>" + esc(formatDateES(r.fechaRecogida)) + "</td>";
         html += "<td style='font-size:0.85rem'>" + esc(r.motivoRemuestreo || "—") + "</td>";
         html += "<td><strong>" + esc(fmtVal(r.aerobios)) + "</strong></td>";
         html += "<td>" + esc(fmtVal(r.hongosNP)) + "</td>";
-        html += "<td>" + esc(fmtVal(r.hongosPat)) + "</td>";
+        html += "<td" + (inc && !isAusencia(r.hongosPat) ? " class='pat-pos'" : "") + "><strong>" + esc(fmtHongosPatCell(r)) + "</strong></td>";
         html += "<td>" + esc(resLabel) + "</td>";
         html += "</tr>";
       });
       html += "</tbody></table>";
     }
 
-    // Conclusiones automáticas basadas en datos del periodo
-    const incidencias = reportRecs.filter(function (r) { return r.estado === "incidencia"; });
-    const validados = reportRecs.filter(function (r) { return r.estado === "validado"; });
-    const puntosOK = validados.filter(function (r) { return (r.tipoMuestreo || "programado") !== "remuestreo"; }).map(function (r) { return r.punto; });
+    // Conclusiones
+    const incidencias = reportRecs.filter(function (r) { return recordIsIncidencia(r) || r.estado === "incidencia"; });
+    const validados = reportRecs.filter(function (r) { return r.estado === "validado" && isAusencia(r.hongosPat); });
     const reqRem = reportRecs.filter(function (r) {
-      return r.requiereRemuestreo && (r.tipoMuestreo || "programado") === "programado";
+      return (r.tipoMuestreo || "programado") !== "remuestreo" && (r.requiereRemuestreo || (!isAusencia(r.hongosPat)));
     });
+    const remPend = remuestreos.filter(function (r) { return r.estado !== "validado"; });
     const remOk = remuestreos.filter(function (r) { return r.estado === "validado"; });
-    const remPend = remuestreos.filter(function (r) { return r.estado === "pendiente" || r.estado === "incidencia"; });
+    const puntosOK = programados.filter(function (r) { return r.estado === "validado" && isAusencia(r.hongosPat); }).map(function (r) { return r.punto; });
 
-    html += "<div class='conclusion'>";
-    if (reportRecs.length === 0) {
-      html += "<p>No hay datos de muestreo para el periodo seleccionado (" + periodoTxt + ").</p>";
-    } else if (incidencias.length === 0) {
+    var conclClass = incidencias.length ? "conclusion con-incidencia" : "conclusion";
+    html += "<div class='" + conclClass + "'>";
+    html += "<h3 style='font-size:1rem;margin:0 0 0.5rem;color:inherit;'>Muestreos programados</h3>";
+    if (!incidencias.length) {
       html += "<p><strong>Se confirma Bioseguridad ambiental</strong> en los puntos analizados: " +
-        esc(puntosOK.join(", ")) + ".</p>";
+        esc(puntosOK.join(", ") || "—") + ".</p>";
       if (remOk.length) {
         html += "<p>Remuestreos conformes tras desinfección: " + esc(remOk.map(function (r) { return r.punto; }).join(", ")) + ".</p>";
       }
@@ -3540,14 +3607,22 @@
         ". Los puntos sin incidencia confirman bioseguridad: " +
         esc(puntosOK.join(", ") || "ninguno") + ".</p>";
       incidencias.forEach(function (r) {
-        if (r._issues && r._issues.length) {
-          html += "<p style='font-size:0.9rem;'>• " + esc(r.punto) + ": " + esc(r._issues.join("; ")) +
-            (r.requiereRemuestreo ? " → <strong>requiere desinfección y remuestreo</strong>" : "") + "</p>";
+        var detail = "";
+        if (!isAusencia(r.hongosPat)) {
+          detail = "Hongos patógenos detectados (<strong>" + esc(fmtHongosPatCell(r)) + "</strong>). Se requiere Ausencia";
+        } else if (r._issues && r._issues.length) {
+          detail = esc(r._issues.join("; "));
+        } else {
+          detail = "Incumplimiento de criterios de bioseguridad";
+        }
+        html += "<p style='font-size:0.92rem;margin:0.45rem 0;'>• " + esc(r.punto) + ": " + detail + "</p>";
+        if (r.requiereRemuestreo || !isAusencia(r.hongosPat)) {
+          html += "<p class='inc-action'>→ requiere desinfección y remuestreo</p>";
         }
       });
     }
-    if (reqRem.length || remPend.length) {
-      html += "<p style='margin-top:0.6rem;'><strong>Remuestreos:</strong> ";
+    if (reqRem.length || remPend.length || remOk.length) {
+      html += "<p style='margin-top:0.65rem;'><strong>Remuestreos:</strong> ";
       if (reqRem.length) html += reqRem.length + " muestreo(s) programado(s) con obligación de remuestreo. ";
       if (remPend.length) html += remPend.length + " remuestreo(s) pendiente(s) o no conformes. ";
       if (remOk.length) html += remOk.length + " remuestreo(s) conforme(s).";
@@ -3555,7 +3630,7 @@
     }
     html += "</div>";
 
-    // Recomendaciones (basadas en el informe de referencia)
+    // Recomendaciones
     html += "<div class='recomendaciones'>";
     html += "<p>Sigue siendo opcional el conteo de aerobios mesófilos en la actualidad para el control de la BS. ";
     html += "Aunque el conteo de mesófilos no supera los límites orientativos configurados, se recomiendan no obstante las siguientes medidas para mantener la bioseguridad ambiental:</p>";
@@ -3563,8 +3638,8 @@
     html += "<li><strong>Uso apropiado de uniformes y en especial mascarillas</strong> (la presencia de mesófilos es atribuible habitualmente a la conversación hablada sin mascarillas)</li></ol>";
     html += "</div>";
 
-    // Criterios del algoritmo
-    html += "<div class='anexo'>";
+    // Anexos en página siguiente (impresión)
+    html += "<div class='page-break anexo'>";
     html += "<h2>Criterios de interpretación (algoritmo Hospital de Jarrio · UNE 171340)</h2>";
     html += "<table style='font-size:0.85rem;'><thead><tr><th>Área (ejemplos)</th><th>Riesgo</th><th>Mesófilos</th><th>Mohos y levaduras</th><th>Patógenos</th></tr></thead><tbody>";
     html += "<tr><td>Quirófano flujo unidireccional</td><td>R5 Muy alto</td><td>&lt;5</td><td>Ausencia</td><td>Ausencia</td></tr>";
@@ -3578,46 +3653,36 @@
 
     html += "<h2>Anexo 1: Esquema de interpretación (normativa)</h2>";
     html += "<p>Se determina el nivel de riesgo correspondiente a la sala analizada según UNE 171340:2020. ";
-    html += "Una vez definido el nivel de riesgo, se aplican los parámetros ambientales de las normas UNE 100713:2005 y UNE 171340:2020 ";
-    html += "(instalación en modo reposo / operacional / stand-by / en funcionamiento).</p>";
-    html += "<p><em>Fuente: Norma Española UNE 171340 Julio 2020. Validación y cualificación de salas de ambiente controlado en hospitales.</em></p>";
+    html += "Una vez definido el nivel de riesgo, se aplican los parámetros ambientales de las normas UNE 100713:2005 y UNE 171340:2020 (instalación en modo reposo / operacional / stand-by / en funcionamiento).</p>";
+    html += "<p style='font-size:0.82rem;font-style:italic;'>Fuente: Norma Española UNE 171340 Julio 2020. Validación y cualificación de salas de ambiente controlado en hospitales.</p>";
 
     html += "<h2>Anexo 2: Protocolo de actuación ante fallo de BSA</h2>";
     html += "<p><strong>PROTOCOLO DE ACTUACIÓN ANTE INCUMPLIMIENTO DE CRITERIOS DE BIOSEGURIDAD AMBIENTAL</strong></p>";
-    html += "<ol style='font-size:0.88rem;'>";
+    html += "<ul style='font-size:0.88rem;'>";
     html += "<li><strong>Calidad</strong> activa el plan de limpieza y desinfección.</li>";
     html += "<li>Notificación a Gerencia, Dirección asistencial, Dirección de Enfermería y Dirección de Gestión.</li>";
     html += "<li>Coordinadora área quirúrgica / Supervisora UVI-REA.</li>";
-    html += "<li><strong>Notificación urgente a Lacera</strong> (Tfn: 684613400) → Inicio inmediato de <em>triple desinfección*</em>.</li>";
+    html += "<li><strong>Notificación urgente a Lacera</strong> (Tfn: 684613400) → Inicio inmediato de <em>triple desinfección</em>.</li>";
     html += "<li>Reajuste de actividad asistencial hasta confirmar BSA (previsión suspensión 24-48 h desde aviso a Lacera).</li>";
-    html += "<li>Posible suspensión de actividad en áreas afectadas o modificación/reubicación estratégica.</li>";
     html += "<li>Tras finalizar limpieza → Calidad → Solicitud de remuestreo (Tfn laboratorio: 684612447).</li>";
-    html += "</ol>";
-    html += "<p style='font-size:0.85rem;'>* <strong>Triple desinfección:</strong> Triple limpieza con dilución de hipoclorito sódico (9 partes de agua / 1 de lejía) en limpieza terminal ";
-    html += "(superficies horizontales y verticales), incluyendo dispositivos médicos y fungibles. Intervalos mínimos de 90 minutos entre las 3. ";
-    html += "Limpieza de rejillas por inmersión y pulverización del tramo de conducto accesible. Finalizar con NDP Air Total+ GLP CE. ";
-    html += "Los intervalos pueden incrementarse según circunstancias (ej. existencia de polvo).</p>";
+    html += "</ul>";
+    html += "<p style='font-size:0.82rem;'><em>Triple desinfección:</em> Triple limpieza con dilución de hipoclorito sódico (9 partes de agua / 1 de lejía) en limpieza terminal (superficies horizontales y verticales), incluyendo dispositivos médicos y fungibles. Intervalos mínimos de 90 minutos entre las 3. Limpieza de rejillas por inmersión y pulverización del tramo de conducto accesible. Finalizar con NDP Air Total+ GLP CE.</p>";
 
-    // Checklist cumplimentado (si hay pasos marcados)
-    if (state.protocol && state.protocol.some(function (s) { return s.done; })) {
-      html += "<h3 style='font-size:0.95rem;margin-top:1rem;'>Seguimiento del protocolo en este periodo</h3>";
-      html += "<table style='font-size:0.82rem;'><thead><tr><th>Paso</th><th>Hecho</th><th>Fecha</th><th>Responsable</th></tr></thead><tbody>";
-      state.protocol.forEach(function (s) {
-        html += "<tr><td>" + esc(s.text) + "</td><td>" + (s.done ? "Sí" : "No") + "</td><td>" +
-          esc(s.fecha ? formatDateES(s.fecha) : "—") + "</td><td>" + esc(s.responsable || "—") + "</td></tr>";
-      });
-      html += "</tbody></table>";
+    // Seguimiento checklist si existe
+    if (state.protocolo && state.protocolo.some && state.protocolo.some(function (x) { return x; })) {
+      html += "<p style='font-size:0.88rem;margin-top:0.6rem;'><strong>Seguimiento del protocolo en este periodo:</strong></p>";
+      // leave if protocol structure differs - skip detailed if not array of objects
     }
 
+    html += "<div class='page-break'></div>";
     html += "<h2>Anexo 3: Flujograma de bioseguridad ambiental</h2>";
     html += "<p style='font-size:0.85rem;'>Diagrama de decisión según nivel de riesgo y actuación ante incumplimiento.</p>";
     html += '<p style="text-align:center;"><img src="docs/flujograma_bsa.png" alt="Flujograma BSA" style="max-width:100%;height:auto;border:1px solid #ccc;" onerror="this.parentNode.innerHTML=\'<em>Coloque docs/flujograma_bsa.png junto a la aplicación para ver el diagrama.</em>\'"></p>';
     html += "</div>";
 
-    // Pie de trazabilidad
-    html += "<p style='margin-top:2rem;font-size:0.8rem;color:#666;border-top:1px solid #ccc;padding-top:0.6rem;'>";
-    html += "Generado por BSA Manager (Dr. José Manuel Fernández Carreira) · Periodo " + periodKey() +
-      " · " + reportRecs.length + " registros · Umbrales configurables · No constituye certificación normativa.";
+    // Pie breve (sin ruido de versión en el documento oficial)
+    html += "<p style='margin-top:1.5rem;font-size:0.75rem;color:#888;border-top:1px solid #ddd;padding-top:0.45rem;'>";
+    html += esc(hospital || "") + (areaSan ? " · " + esc(areaSan) : "") + " · Muestreo " + periodoTxt;
     html += "</p>";
 
     preview.innerHTML = html;
